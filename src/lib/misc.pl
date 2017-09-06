@@ -2,6 +2,10 @@
 
 :- module(misc, [
 		 fresh_pred_sym/1,
+		 mk_and/2,
+		 mk_and/3,
+		 get_fresh_num/1,
+		 reset_fresh_num/0,
 		 get_pairs/2,
 		 get_ord_pairs/2,
 		 substitute_term/4,
@@ -15,6 +19,20 @@
 :- use_module(library(ordsets)).
 :- use_module(library(terms)).
 :- use_module(library(avl)).
+
+
+mk_and(true, R, R) :- !.
+mk_and(false, _, false) :- !.
+mk_and(R, true, R) :- !.
+mk_and(_, false, false) :- !.
+mk_and(A, B, (A, B)).
+
+mk_and([A1|As], R) :-
+	foreach(A, As),
+	fromto(A1, In, Out, R)
+	do
+	mk_and(A, In, Out).
+mk_and([], true).
 
 bb_inc(Key) :-
 	bb_get(user:Key, I),
@@ -66,6 +84,17 @@ get_ord_pairs(Set, Pairs) :-
 	do  true
 	),
 	ord_subtract(Product, Diag, Pairs).
+
+reset_fresh_num :-
+	bb_put(fresh_num, 0).
+
+get_fresh_num(N) :-
+	(  bb_get(fresh_num, N) ->
+	    true
+	;  N=0
+	),
+	N1 is N+1,
+	bb_put(fresh_num, N1).
 
 reset_pred_sym :-
 	bb_put(sym_num, 0).

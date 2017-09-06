@@ -25,29 +25,6 @@ next(IF_Inst, Ex_Inst, REG, Done, T,
      Done=1, T1=T, Done1=Done
    ).
 
-% 1st try: relational invariant without synchronization.
-/*
-% init
-inv(IF_InstL, Ex_InstL, REGL, DoneL, TL, IF_InstR, Ex_InstR, REGR, DoneR, TR) :-
-	IF_InstL=0, Ex_InstL=0, REGL=0, DoneL=0, TL=0, IF_InstR=0, Ex_InstR=0, REGR=0, DoneR=0, TR=0.
-
-
-% left step
-inv(IF_InstL1, Ex_InstL1, REGL1, DoneL1, TL1, IF_InstR, Ex_InstR, REGR, DoneR, TR) :-
-	inv(IF_InstL, Ex_InstL, REGL, DoneL, TL, IF_InstR, Ex_InstR, REGR, DoneR, TR),
-	next(IF_InstL, Ex_InstL, REGL, DoneL, TL, IF_InstL1, Ex_InstL1, REGL1, DoneL1, TL1).
-
-% right step
-inv(IF_InstL, Ex_InstL, REGL, DoneL, TL, IF_InstR1, Ex_InstR1, REGR1, DoneR1, TR1) :-
-	inv(IF_InstL, Ex_InstL, REGL, DoneL, TL, IF_InstR, Ex_InstR, REGR, DoneR, TR),
-	next(IF_InstR, Ex_InstR, REGR, DoneR, TR, IF_InstR1, Ex_InstR1, REGR1, DoneR1, TR1).
-
-TL=TR :- inv(IF_InstL, Ex_InstL, REGL, DoneL, TL, IF_InstR, Ex_InstR, REGR, DoneR, TR),
-	DoneL=1,
-	DoneR=1.
-*/
-
-
 inv(IF_Inst, Ex_Inst, REG, Done, T) :-
 	IF_Inst=0, Ex_Inst=0, REG=0, Done=0, T=0.
 
@@ -55,7 +32,7 @@ inv(IF_Inst1, Ex_Inst1, REG1, Done1, T1) :-
 	next(IF_Inst, Ex_Inst, REG, Done, T, IF_Inst1, Ex_Inst1, REG1, Done1, T1),
 	inv(IF_Inst, Ex_Inst, REG, Done, T).
 
-TR=2 :-
+TR=TL :-
 	inv(IF_InstL, Ex_InstL, REGL, DoneL, TL),
 	inv(IF_InstR, Ex_InstR, REGR, DoneR, TR),
 	DoneL=1, DoneR=1.

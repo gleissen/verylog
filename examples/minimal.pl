@@ -6,7 +6,7 @@ register(regs).
 
 %-- links
 asn(if_inst, ex_inst).
-fun(ex_inst, regs, wb_res).
+link(ex_inst, regs, wb_res).
 
 %-- tag source and sink
 source(if_inst).
