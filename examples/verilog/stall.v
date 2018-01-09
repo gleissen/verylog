@@ -10,7 +10,7 @@ module stalling_cpu(clk);
    reg [1:0] Stall;
    reg [31:0] IF_instr;
    reg [31:0] ID_instr;
-   reg [1:0]  EX_ALUOp;;
+   reg [1:0]  EX_ALUOp;
    reg [31:0] MEM_ALUOut;
    reg [31:0] WB_ALUOut;
 

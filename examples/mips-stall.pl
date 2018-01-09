@@ -101,4 +101,4 @@ asn(ex_aluout, mem_aluout).
 
 %-- tag source and sink
 source(if_inst).
-sink(wb_aluout).
+sink(mem_aluout).
