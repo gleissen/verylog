@@ -46,6 +46,9 @@ wire(ex_aluout).
 wire(id_memread).
 wire(id_memread_v).
 
+% auxilliary
+wire(cond1).
+
 %-- if stage
 ite( stall=1,
      asn(id_inst, id_inst),
@@ -53,12 +56,20 @@ ite( stall=1,
    ).
 
 %-- hazard detection
+%-- 
+%-- paths:
+%-- id_rs,id_rt, ex_memread  : id_instr
+%-- ex_rt: id_rt
+%-- 
+
+cont(
+     link(
+     [ex_memread,ex_rt,id_rs,id_rt],
+     cond1	  
+).
 cont(
      ite(
-	 (   ex_memread=1,
-	     (   ex_rt==id_rs
-	     ;   ex_rt==id_rt	     
-	     )
+	 cond1
 	 ),
 	 asn(const(1), stall),
 	 asn(const(0), stall)
@@ -66,12 +77,12 @@ cont(
     ).
 
 %-- wiring
-cont(link(id_op, id_instr)).
+cont(link(id_instr, id_op)).
 
 cont(
      ite(stall,
-	 asn(id_memread, const(1)),
-	 asn(id_memread, id_memread_v)
+	 asn(const(1), id_memread),
+	 asn(id_memread_v, id_memread)
 	)
     ).
 
