@@ -6,7 +6,25 @@ query_naming(
 		)
 	    ).
 % assignment of Y to X. (X->Y)
+
 assign_op(X_T, Y_T) := X_T=Y_T. %ite(X_T>=1, Y_T>=1, Y_T=<0).
+
+/*
+inv(
+    If_InstrL ,Id_InstrL, Id_rtL, EX_MemReadL, Ex_rtL, If_inst_tL, Id_instr_tL, Mem_aluout_tL, DoneL, 
+    If_InstrR, Id_InstrR, Id_rtR, EX_MemReadR, Ex_rtR, If_inst_tR, Id_instr_tR, Mem_aluout_tR, DoneR
+   ) := 
+ex_rtr=ex_rtl,ex_memreadr=ex_memreadl,id_rtr=id_rtl,id_instrr=id_instrl,if_instrr=if_instrl,
+(
+doner=1,id_instr_tr=1,if_inst_tr=0 ;
+doner=1,id_instr_tr=0,if_inst_tr=0;
+doner=0,id_instr_tr=1,if_inst_tr=0;
+doner=0,id_instr_tr=0,if_inst_tr=1;
+doner=0,id_instr_tr=0,if_inst_tr=0
+)
+).
+*/
+
 
 next(
      Stall, Cond1, If_Instr, Id_Instr, ID_MemRead, ID_MemRead_v, Id_rt, Ex_rt, If_inst_t, Id_instr_t, Ex_aluout_t, Done, 
@@ -42,6 +60,7 @@ inv(
 	If_inst_tR=1, Id_instr_tR=0, Mem_aluout_tR=0, DoneR=0, 
 	%-- is this okay?
 	Id_InstrL=Id_InstrR,
+	If_InstrL=If_InstrR,
 	%-- this assumes the pipeline state is equal, initially.
 	%-- can we justify these? 
 	Id_rtL=Id_rtR,
@@ -84,29 +103,23 @@ inv(
 	  % -- new instruction doesn't have a tag
 	  If_inst_tL1=0,
 	  If_inst_tR1=0
+	/*
 	;   % both done: spin.
 	    DoneL=1, DoneL1=1,
 	    DoneR=1, DoneR1=1
+	*/
 	),
 	inv(
 	    If_InstrL, Id_InstrL, Id_rtL, EX_MemReadL, Ex_rtL, If_inst_tL, Id_instr_tL, Mem_aluout_tL, DoneL, 
 	    If_InstrR, Id_InstrR, Id_rtR, EX_MemReadR, Ex_rtR, If_inst_tR, Id_instr_tR, Mem_aluout_tR, DoneR
 	   ).
 
-/*-- trace of assignments for EX_MemRead
-vars=[EX_MemRead]
 
-ID_MemRead_v = f(ID_instr)
-
-always @pos_edge(clk)
-   EX_MemRead  <= ID_MemRead;
-
-ID_MemRead = Stall ? 1'b0 : ID_MemRead_v;
-% ite(Stall=1, ID_MemRead=1, ID_MemRead=ID_MemRead_v)  
-
-
-*/
-
+DoneL=1:-
+	inv(
+	    If_InstrL, Id_InstrL, Id_rtL, EX_MemReadL, Ex_rtL, If_inst_tL, Id_instr_tL, Mem_aluout_tL, DoneL,
+	    If_InstrR, Id_InstrR, Id_rtR, EX_MemReadR, Ex_rtR, If_inst_tR, Id_instr_tR, Mem_aluout_tR, DoneR
+	   ), DoneR=1.
 
 DoneR=1:-
 	inv(
