@@ -1,13 +1,56 @@
 #!/bin/zsh
 
+THIS_DIR=${0:A:h}
+APP=$THIS_DIR/verylog
+
 if [[ $# -eq 0 ]]; then
-	echo "usage: $0 [parser options] <verilog file>"
-	exit 1
+    echo "usage: $0 [parser options] <verilog file>"
+    exit 1
 fi
 
-sicstus \
-	-f --noinfo --nologo \
-	-l 'src/verilog.pl' \
-	--goal '(run -> halt; halt(1)).' \
-	-- <(ivl $@)
+FILENAME="${@[-1]}"
+shift -p 1
 
+if [[ ! -f $FILENAME ]]; then
+    echo "'$FILENAME' is not a regular file"
+    exit 1
+fi
+
+IVL_CHECK=$(which ivl)
+
+if [[ ! -x "$IVL_CHECK" ]]; then
+    echo "No ivl executable found in the PATH"
+    exit 1
+fi
+
+if [[ -x "$(which rlwrap)" ]]; then
+    alias sicstus='rlwrap sicstus'
+else
+    alias sicstus='sicstus'
+fi
+
+IVL_DIR=${IVL_CHECK:A:h}
+IVL=$IVL_DIR/ivl
+IVLPP=$IVL_DIR/ivlpp/ivlpp
+
+LOGFILE=$THIS_DIR/.log.$(date +%F-%H-%M-%S)
+
+run_sicstus() {
+    echo ':- discontiguous register/1, wire/1.' \
+        && $IVL $@ -O >(cat) =($IVLPP $FILENAME) &>$LOGFILE \
+            || echo 'parse_failed(true).' 
+}
+
+
+# # interpret
+# pushd $THIS_DIR
+# ( sicstus \
+#       -f --noinfo --nologo \
+#       -l 'src/verilog.pl' \
+#       --goal '(run -> halt; halt(1)).' \
+#       -- =(run_sicstus $@) \
+#       && rm -f $LOGFILE ) || ( echo "[ERROR]" 1>&2 && cat $LOGFILE )
+# popd
+
+# compile & run
+make -s && (($APP =(run_sicstus $@) && rm -f $LOGFILE ) || (echo "[ERROR]"; cat $LOGFILE; exit 1))

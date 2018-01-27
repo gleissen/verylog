@@ -1,13 +1,14 @@
-:- use_module('lib/misc.pl', [
-			      format_atom/3,
+:- discontiguous small/1.
+
+:- use_module('lib/misc.pl', [format_atom/3,
 			      get_fresh_num/1,
 			      mk_and/2,
-			      mk_and/3
-			     ]).
+			      mk_and/3]).
 :- use_module('lib/utils.pl').
 
 :- dynamic
         assigned/1,
+        parse_failed/1,
         register/1,
         wire/1,
         module_inst/4,
@@ -15,6 +16,18 @@
         asn/2,
         taint_source/1,
         taint_sink/1.
+
+flush_db :-
+        foreach(DF, [parse_failed/1,
+                     register/1,
+                     wire/1,
+                     module_inst/4,
+                     always/2,
+                     asn/2,
+                     taint_source/1,
+                     taint_sink/1])
+        do abolish(DF, [force(true)]).
+        
 
 /*
 Creates Horn clause verification conditions from a intermediate language verilog file.
@@ -181,7 +194,22 @@ test :-
 
 run :-
         prolog_flag(argv, [Input|_]),
-        print_file(Input).
+        % show_file(Input),
+        flush_db,
+        consult([Input]),
+        (current_predicate(parse_failed/1) -> halt(1); true),
+        findall(A, register(A), Regs),
+        format('~p~N', [Regs]).
 
 user:runtime_entry(start) :-
         run.
+
+show_file(Input) :-
+        format('file name: ~p~N', [Input]),
+        format('file contents:~N',[]),
+        format('~N',[]),
+        print_file(Input),
+        S = '################################################################################~N',
+        format(S, []),
+        format(S, []),
+        format(S, []).
