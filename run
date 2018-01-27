@@ -1,0 +1,13 @@
+#!/bin/zsh
+
+if [[ $# -eq 0 ]]; then
+	echo "usage: $0 [parser options] <verilog file>"
+	exit 1
+fi
+
+sicstus \
+	-f --noinfo --nologo \
+	-l 'src/verilog.pl' \
+	--goal '(run -> halt; halt(1)).' \
+	-- <(ivl $@)
+

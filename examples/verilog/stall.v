@@ -2,7 +2,7 @@
 
 module stalling_cpu(clk);
    input clk;
-  
+   
    //=============  
    // Definitions
    //=============
@@ -18,7 +18,8 @@ module stalling_cpu(clk);
    // IF stage
    //=============
 
-   // @annot{taint_source(IF_instr)}
+   // -- Annotation: taint source
+   // @annot{taint_source(v_IF_instr)}
    
    always @(posedge clk) 
      if (Stall)
@@ -55,6 +56,16 @@ module stalling_cpu(clk);
    //=============
 
    // -- Annotation: taint sink.   
-   // @annot{taint_sink(WB_ALUOut)}.
+   // @annot{taint_sink(v_WB_ALUOut)}.
 
+endmodule
+
+module decide_stall(i, o);
+   input i;
+   output o;
+endmodule
+
+module alu(i, o);
+   input i;
+   output o;
 endmodule
