@@ -4,35 +4,8 @@
 			      get_fresh_num/1,
 			      mk_and/2,
 			      mk_and/3]).
+
 :- use_module('lib/utils.pl').
-
-:- dynamic
-        assigned/1,
-        parse_failed/1,
-        register/1,
-        wire/1,
-        link/3,
-        always/2,
-        asn/2,
-        taint_source/1,
-        taint_sink/1
-        .
-
-flush_db :-
-        DynamicPredicates = [
-                             assigned/1,
-                             parse_failed/1,
-                             register/1,
-                             wire/1,
-                             link/3,
-                             always/2,
-                             asn/2,
-                             taint_source/1,
-                             taint_sink/1
-                            ],
-        (  foreach(D, DynamicPredicates)
-        do abolish(D, [force(true)])
-        ). 
 
 /*
 ==========================================
@@ -45,7 +18,29 @@ always(Event, Statement)
 taint_source(R)
 taint_sink(R)
 */
-        
+
+query_ir(P, Ls) :-
+        ( findall(F, current_predicate(P,F), Fs), length(Fs, N), N > 1 ->
+            format('~p has multiple arities !', [P]), halt(1)
+        ; IR = [ register
+               , wire
+               , link
+               , always
+               , taint_source
+               , taint_sink
+               ], \+ memberchk(P, IR) ->
+            format('~p does not belong to the IR !', [P]), halt(1)
+        ; true
+        ),                      % sanity check
+        ( current_predicate(P,F), functor(F,N,A)  ->
+            ( A = 1 -> findall(X,     call(N,X),     Ls)
+            ; A = 2 -> findall(X-Y,   call(N,X,Y),   Ls)
+            ; A = 3 -> findall(X-Y-Z, call(N,X,Y,Z), Ls)
+            ; (format('Unknown predicate in query: ~p~n', [P]), halt(1))
+            )
+        ; Ls=[]
+        ).
+
 
 /*
 Creates Horn clause verification conditions from a intermediate language verilog file.
@@ -58,7 +53,7 @@ mk_var_name(ID, VarName) :-
 %-- Transition relation.
 
 mk_assignments(Res) :-
-        findall(A-B, asn(A,B), Ls),
+        query_ir(asn, Ls),
         (   foreach(X-Y, Ls),
             foreach(Rel, Res)
         do  mk_var_name(X, XV),
@@ -68,7 +63,7 @@ mk_assignments(Res) :-
         ).
 
 mk_links(Res) :-
-	findall(A-B-C, link(A,B,C), Ls),
+        query_ir(link, Ls),
 	(   foreach(X-Y-Z, Ls),
 	    foreach(Rel, Res)
 	do  mk_var_name(X, XV),
@@ -79,7 +74,7 @@ mk_links(Res) :-
 	).
 
 mk_unassigned(Res) :-
-	findall(X, (register(X),\+assigned(X)), Vs),
+	findall(X, (query_ir(register,Rs), memberchk(X, Rs), \+assigned(X)), Vs),
 	(   foreach(V, Vs),
 	    foreach(Def, Defs)
 	do  mk_var_name(V, VN),
@@ -101,7 +96,7 @@ mk_sink_cond(Res) :-
 	format_atom('ite(~p1=1,Done1=1,Done1=Done)',[XV], Res).
 
 mk_reset(Res) :-
-	findall(X, register(X), Vs),
+        query_ir(register,Vs),
 	(   foreach(V, Vs),
 	    fromto('', In, Out, Defs)
 	do  mk_var_name(V, VN),
@@ -129,7 +124,7 @@ mk_next(Res) :-
 %-- Invariants.
 
 mk_invariant_vars(Suffix, Vs1) :-
-	findall(X, register(X), Vs),
+        query_ir(register,Vs),
 	(   foreach(V, Vs),
 	    foreach(V1, Vs1),
 	    param(Suffix)
@@ -181,7 +176,7 @@ mk_property(Res) :-
 	format_atom('DoneR=1 :- ~p, DoneL=1.', [Inv], Res).
 
 mk_query_naming(Res) :-
-	findall(X, register(X), Vs),
+        query_ir(register,Vs),
 	mk_and(Vs, Vs1),
 	format_atom('query_naming(inv(~p, done, t)).', [Vs1], Res).
 
@@ -199,9 +194,9 @@ mk_output_file(Res) :-
 	mk_query_naming(Naming),
         format_atom('~p', [Naming], Res0),
 
-        Res1 = '',
-	% mk_next(Next),
-        % format_atom('~p', [Next], Res1),
+        % Res1 = '',
+	mk_next(Next),
+        format_atom('~p', [Next], Res1),
 
         Res2 = '',
 	% mk_vcs(Vcs),
@@ -210,11 +205,19 @@ mk_output_file(Res) :-
         format_atom('~n~n~p~n~n~p~n~n~p', [Res0, Res1, Res2], Res),
         true.
 	
+% flush_db :-
+%         DynamicPredicates=[],
+%         % ir_dynamic_predicates(DynamicPredicates),
+%         (  foreach(D, DynamicPredicates)
+%         % do abolish(D, [force(true)])
+%         do retractall(D)
+%         ). 
 
 my_consult(File) :-
-        flush_db,
+        % flush_db,
         consult(File),
-        (current_predicate(parse_failed/1) -> halt(1); true).
+        (current_predicate(parse_failed/1) -> halt(1); true),
+        true.
 
 main :-
         prolog_flag(argv, [Input|_]),
