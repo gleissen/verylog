@@ -1,5 +1,6 @@
 APP=verylog
-FILE=src/verilog.pl
+MAIN_FILE=src/verilog.pl
+OTHER_FILES=$(wildcard src/lib/*.pl)
 
 all: $(APP)
 
@@ -11,7 +12,7 @@ $(APP): $(APP).sav
 		--resources-from-sav \
 		--resources=$(APP).sav=/$(APP)/$(APP).sav
 
-$(APP).sav: $(FILE)
-	sicstus --goal "compile('$(FILE)'), save_program('$(APP).sav'), halt."
+$(APP).sav: $(MAIN_FILE) $(OTHER_FILES)
+	sicstus --goal "compile('$<'), save_program('$(APP).sav'), halt."
 clean :
 	rm $(APP) $(APP).sav

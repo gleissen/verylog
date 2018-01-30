@@ -11,22 +11,40 @@
         parse_failed/1,
         register/1,
         wire/1,
-        module_inst/4,
+        link/3,
         always/2,
         asn/2,
         taint_source/1,
-        taint_sink/1.
+        taint_sink/1
+        .
 
 flush_db :-
-        foreach(DF, [parse_failed/1,
-                     register/1,
-                     wire/1,
-                     module_inst/4,
-                     always/2,
-                     asn/2,
-                     taint_source/1,
-                     taint_sink/1])
-        do abolish(DF, [force(true)]).
+        DynamicPredicates = [
+                             assigned/1,
+                             parse_failed/1,
+                             register/1,
+                             wire/1,
+                             link/3,
+                             always/2,
+                             asn/2,
+                             taint_source/1,
+                             taint_sink/1
+                            ],
+        (  foreach(D, DynamicPredicates)
+        do abolish(D, [force(true)])
+        ). 
+
+/*
+==========================================
+Clauses used in the intermediate language:
+==========================================
+register(R)
+wire(W)
+module_inst(ModuleName, InstName, InputArgs, OutputArgs)
+always(Event, Statement)
+taint_source(R)
+taint_sink(R)
+*/
         
 
 /*
@@ -87,7 +105,7 @@ mk_reset(Res) :-
 	(   foreach(V, Vs),
 	    fromto('', In, Out, Defs)
 	do  mk_var_name(V, VN),
-	    (   source(V)->
+	    (   taint_source(V)->
 		format_atom('~p (~p1=1;~p1=0), ',[In,VN,VN], Out)
 	    ;   format_atom('~p ~p1=0, ',[In,VN], Out)
 	    )
@@ -96,8 +114,8 @@ mk_reset(Res) :-
 
 mk_next(Res) :-
 	mk_assignments(Asn),
-%	mk_links(Links),
-	Links=[],
+	mk_links(Links),
+	% Links=[],
 	mk_and(Asn, Asn1),
 	mk_and(Links, Links1),
 	mk_and(Asn1, Links1, Bd),
@@ -106,7 +124,7 @@ mk_next(Res) :-
 	mk_sink_cond(Sink),
 	mk_unassigned(Un),
 	format_atom('Done=1, T1=T, Done1=Done',[], Spin),
-	format_atom('~p:=~n(~n Done=0, ~p~n; Done=0, ~p, ~p,~p~n; ~p~n).',[Hd,Reset,Sink,Un,Bd,Spin], Res).
+	format_atom('~p := ~n(~n Done=0, ~p~n; Done=0, ~p, ~p,~p~n; ~p~n).',[Hd,Reset,Sink,Un,Bd,Spin], Res).
 
 %-- Invariants.
 
@@ -176,40 +194,35 @@ mk_vcs(Res) :-
 	mk_property(Prop),
 	format_atom('~p:-~p~n~p :- ~p,~n~p,~n~p.~n~p~n',[Inv,Init,Inv1,NextL,NextR,Inv,Prop], Res).
 
-cleanup :-
-	retractall(assigned).
-
 mk_output_file(Res) :-
+        % Res0 = '',
 	mk_query_naming(Naming),
-	mk_next(Next),
-	mk_vcs(Vcs),
-	format_atom('~p~n~p~n~p~n',[Naming,Next,Vcs], Res).
-	
-test :-
-	consult(['../examples/minimal/stall-my.pl']),
-	cleanup,
-	%mk_output_file(Res),
-	mk_output_file(Res),
-	format('~p',[Res]).
+        format_atom('~p', [Naming], Res0),
 
-run :-
-        prolog_flag(argv, [Input|_]),
-        % show_file(Input),
+        Res1 = '',
+	% mk_next(Next),
+        % format_atom('~p', [Next], Res1),
+
+        Res2 = '',
+	% mk_vcs(Vcs),
+        % format_atom('~p', [Vcs], Res2),
+
+        format_atom('~n~n~p~n~n~p~n~n~p', [Res0, Res1, Res2], Res),
+        true.
+	
+
+my_consult(File) :-
         flush_db,
-        consult([Input]),
-        (current_predicate(parse_failed/1) -> halt(1); true),
-        findall(A, register(A), Regs),
-        format('~p~N', [Regs]).
+        consult(File),
+        (current_predicate(parse_failed/1) -> halt(1); true).
+
+main :-
+        prolog_flag(argv, [Input|_]),
+        % print_file(Input),
+        my_consult(Input),
+	mk_output_file(Res),
+	format('~p',[Res]),
+        true.
 
 user:runtime_entry(start) :-
-        run.
-
-show_file(Input) :-
-        format('file name: ~p~N', [Input]),
-        format('file contents:~N',[]),
-        format('~N',[]),
-        print_file(Input),
-        S = '################################################################################~N',
-        format(S, []),
-        format(S, []),
-        format(S, []).
+        main.

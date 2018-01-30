@@ -1,3 +1,5 @@
+% vim: set ft=prolog
+
 query_naming(
 	     inv(
 		 id_instrl, if_inst_tl, id_instr_tl, mem_aluout_tl, donel, tl,
