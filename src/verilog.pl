@@ -70,6 +70,7 @@ mk_query_naming(Res) :-
 %% #############################################################################
 
 mk_next(Res) :-
+        mk_next_helper_predicates(Helper),
 	% mk_assignments(Asn),
 	% mk_links(Links),
 	% % Links=[],
@@ -78,18 +79,32 @@ mk_next(Res) :-
 	% mk_and(Asn1, Links1, Bd),
 	mk_next_def(Hd),
 	% mk_reset(Reset),
-	mk_next_sink_cond(_Sink),  mk_next_sep(_Sink,Sink),
-        mk_next_incr(_Incr),       mk_next_sep(_Incr,Incr),
-        mk_next_always(_Always),   mk_next_sep(_Always,Always),
+	mk_next_sink_cond(_Sink),   mk_next_sep(_Sink,Sink),
+        mk_next_incr(_Incr),        mk_next_sep(_Incr,Incr),
+        mk_next_always(_Always),    mk_next_sep(_Always,Always),
+        mk_next_module_inst(_Inst), mk_next_sep(_Inst,Inst),
 	% mk_unassigned(Un),
 	% format_atom('Done=1, T1=T, Done1=Done',[], Spin),
 	format_atom(
-                    '~p :=~n(~p,~p,~p~n).',
-                    [Hd, Always, Sink, Incr],
+                    '~p~p :=~n(~p,~p,~n~p,~n~p~n).',
+                    [Helper, Hd, Always, Inst, Sink, Incr],
                     Res
                    ),
 	% format_atom('~p := ~n(~n Done=0, ~p~n; Done=0, ~p, ~p,~p~n; ~p~n).',[Hd,Reset,Sink,Un,Bd,Spin], Res),
         true.
+
+mk_next_helper_predicates(Res) :-
+        HelperPredicates = [ mk_next_helper_assign_op ],
+        (   foreach(P, HelperPredicates),
+            foreach(R, Rs),
+            param(Rs)
+        do  current_predicate(P,F),
+            functor(F,N,1),
+            call(N,_R),
+            format_atom('~p~n~n', [_R], R)
+        ),
+        mk_and(Rs,Res).
+        
 
 %% generate the header for the transition relation definition
 %% i.e. next(...)
@@ -133,18 +148,25 @@ mk_next_stmt(Type,Args,Res) :-
         mk_next_stmt_helper(Type,Args,Res).
 
 mk_next_stmt_helper(nb_asn, [L,R], Res) :-
-        !,
-        mk_var_name(L,LV), mk_primed(LV,LV1),
-        mk_var_name(R,RV),
-        mk_tagvar_name(L,LT), mk_primed(LT,LT1),
-        mk_tagvar_name(R,RT),
-        format_atom('~p = ~p, ~p = ~p', [LT1, RT, LV1, RV], Res).
+        mk_next_assign_op(L,R,Res).
 
 mk_next_stmt_helper(ite, [Cond, Then, Else], Res) :-
-        Res = 'ite_is_missing'.
+        format_atom('~p ? ~p : ~p', [Cond, Then, Else], _Res),
+        missing_atom(_Res, Res).
 
 mk_next_stmt_helper(Type, _, _) :-
         format('~p is not yet implemented~n', [Type]), halt(1).
+
+mk_next_module_inst(Res) :-
+        query_ir(module_inst, Modules),
+        maplist(mk_next_module_helper, Modules, Ms),
+        maplist(mk_next_sep, Ms, Ms2),
+        mk_and(Ms2,Ms3),
+        format_atom('~p', [Ms3], Res).
+
+mk_next_module_helper(Name-Inputs-Outputs,Res) :-
+        format_atom('~p(~p,~p)', [Name, Inputs, Outputs], _Res),
+        missing_atom(_Res, Res).
 
 % mk_assignments(Res) :-
 %         query_ir(nb_asn, Ls),
@@ -188,6 +210,17 @@ mk_next_stmt_helper(Type, _, _) :-
 % 	),
 % 	format_atom('~p Done1=0', [Defs], Res).
 
+mk_next_assign_op(L,R,Res) :-
+        !,
+        mk_var_name(L,LV), mk_primed(LV,LV1),
+        mk_var_name(R,RV),
+        mk_tagvar_name(L,LT), mk_primed(LT,LT1),
+        mk_tagvar_name(R,RT),
+        format_atom('assign_op(~p, ~p, ~p, ~p)', [LT1, RT, LV1, RV], Res).
+
+mk_next_helper_assign_op(Res) :-
+        format_atom('assign_op(LT1, RT, LV1, RV) :- !, LT1 = RT, LV1 = RV.', [], Res).
+        
 mk_next_sep(P,Res) :-
         format_atom('~n  ~p', [P], Res).
 
@@ -248,6 +281,10 @@ mk_output_file(Res) :-
 	mk_query_naming(Naming),
         format_atom('~p', [Naming], Res0),
 
+
+            
+            
+
         % Res1 = '',
 	mk_next(Next),
         format_atom('~p', [Next], Res1),
@@ -292,7 +329,7 @@ ir_stmt([
         ]).
 
 ir_list([
-         register, wire, link, always,
+         register, wire, module_inst, always,
          taint_source, taint_sink
         ]).
 
@@ -342,3 +379,12 @@ mk_primed(X,X1) :-
 
 mk_ite(Cond,Then,Else,Res) :-
         format_atom('ite(~p, ~p, ~p)', [Cond, Then, Else], Res).
+
+missing_atom(P, Res) :-
+        inline_comment(P, Comment),
+        format_atom('~p true', [Comment], Res).
+
+inline_comment(P, Comment) :-
+        atom_codes(CB, "/*"),
+        atom_codes(CE, "*/"),
+        format_atom('~p ~p ~p', [CB, P, CE], Comment).
