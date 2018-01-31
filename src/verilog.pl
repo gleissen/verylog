@@ -4,7 +4,9 @@
 			      get_fresh_num/1,
 			      mk_and/2,
 			      mk_and/3,
-                              mk_sum/2
+                              mk_sum/2,
+                              contains/2,
+                              flatten/2
                               ]).
 
 :- use_module('lib/utils.pl').
@@ -134,11 +136,11 @@ mk_next_stmt(Stmt,Res) :-
 
 %% generate the TR for process a non-blocking assignment
 mk_next_stmt_helper(nb_asn, [L,R], Res) :-
-        mk_next_assign_op(L,R,Res).
+        !, mk_next_assign_op(L,R,Res).
 
 %% generate the TR for an if statement
 mk_next_stmt_helper(ite, [Cond, Then, Else], Res) :-
-        mk_next_ite_cond(Cond,CondT,CondF),
+        !, mk_next_ite_cond(Cond,CondT,CondF),
         mk_next_stmt(Then, ThenRes),
         mk_next_stmt(Else, ElseRes),
         format_atom('((~p) -> (~p) ; (~p) -> (~p))', [CondT, ThenRes, CondF, ElseRes], Res).
@@ -190,18 +192,10 @@ mk_next_sep(P,Res) :-
         format_atom('~n  ~p', [P], Res).
 
 mk_next_vars(Vs) :-
-        mk_next_vars_helper(Vars),
+        get_all_vars(Vars),
         maplist(mk_primed, Vars, Vars1),
         append(Vars,Vars1,Vs).
-
-mk_next_vars_helper(VsAllVars) :-
-        query_ir(register,VsRegs),
-        maplist(mk_var_name,VsRegs,VsRegVars),
-        maplist(mk_tag_name,VsRegVars,VsRegVarsT),
-        append(VsRegVars,VsRegVarsT,VsMostVars),
-        done_var(Done),
-        t_var(T),
-        append(VsMostVars, [Done, T], VsAllVars).
+        
 
 %% #############################################################################
 %% ### INVARIANTS ##############################################################
@@ -215,14 +209,59 @@ mk_vcs(Res) :-
         mk_and(_Res, Res).
 
 mk_vcs_init(Res) :-
-	mk_vcs_vars(Vs),
-	mk_and(Vs,VsAnd),
-	format_atom('inv(~p) :- true.', [VsAnd], Res).
+	mk_vcs_vars(VcsVars),
+	mk_and(VcsVars,VsArgs),
+
+        query_ir(taint_source, Sources),
+        maplist(mk_tagvar_name, Sources, SourceTagVars),
+        (   foreach(TV, SourceTagVars),
+            foreach(R, TVRes1),
+            param(TVRes1)
+        do  mk_lhs_name(TV, TVL),
+            mk_rhs_name(TV, TVR),
+            format_atom('~p = 1, ~p = 1', [TVL, TVR], _R),
+            mk_next_sep(_R,R)
+        ),
+
+        get_tag_vars(TagVars),
+        exclude(contains(SourceTagVars), TagVars, RestVars),
+        (   foreach(TV, RestVars),
+            foreach(R,  TVRes2),
+            param(TVRes2)
+        do  mk_lhs_name(TV, TVL),
+            mk_rhs_name(TV, TVR),
+            format_atom('~p = 0, ~p = 0', [TVL, TVR], _R),
+            mk_next_sep(_R,R)
+        ),
+
+        get_other_vars(OtherVars),
+        (   foreach(TV, OtherVars),
+            foreach(R,  TVRes3),
+            param(TVRes3)
+        do  mk_lhs_name(TV, TVL),
+            mk_rhs_name(TV, TVR),
+            format_atom('~p = 0, ~p = 0', [TVL, TVR], _R),
+            mk_next_sep(_R,R)
+        ),
+
+        (   foreach(S, Sources),
+            foreach(R,  TVRes4),
+            param(TVRes4)
+        do  dot([mk_lhs_name, mk_var_name], S, VL),
+            dot([mk_rhs_name, mk_var_name], S, VR),
+            format_atom('~p = ~p', [VL, VR], _R),
+            mk_next_sep(_R,R)
+        ),
+
+        flatten([TVRes1, TVRes2, TVRes3, TVRes4], _VsBody),
+        mk_and(_VsBody, VsBody),
+
+	format_atom('inv(~p) :- ~p.', [VsArgs, VsBody], Res).
 
 mk_vcs_vars(Vs) :-
-        mk_next_vars_helper(AllVars),
-        maplist(add_suffix('L'), AllVars, LeftVars),
-        maplist(add_suffix('R'), AllVars, RightVars),
+        get_all_vars(AllVars),
+        maplist(mk_lhs_name, AllVars, LeftVars),
+        maplist(mk_rhs_name, AllVars, RightVars),
         append(LeftVars,RightVars,Vs).
 
 %% #############################################################################
@@ -313,6 +352,12 @@ add_prefix(P,X,X1) :-
 mk_var_name(ID, VarName) :-
         add_prefix('V_', ID, VarName).
 
+mk_lhs_name(ID, VarName) :-
+        add_suffix('L', ID, VarName).
+
+mk_rhs_name(ID, VarName) :-
+        add_suffix('R', ID, VarName).
+
 mk_tag_name(ID, VarName) :-
         add_suffix('_t', ID, VarName).
 
@@ -346,7 +391,27 @@ inline_comment(P, Comment) :-
 dot([],In,In).
 dot([H|T],In,Out) :-
         dot(T, In, _Out),
-        current_predicate(H,F),
-        functor(F,N,2),
-        call(N, _Out, Out).
+        call(H, _Out, Out).
+        % current_predicate(H,F),
+        % functor(F,N,A),
+        % ( A = 2 -> call(N, _Out, Out)
+        % ; format('arity of ~p is not 2', [H]), halt
+        % ).
 
+get_reg_vars(VsRegVars) :-
+        query_ir(register,VsRegs),
+        maplist(mk_var_name,VsRegs,VsRegVars).
+
+get_tag_vars(VsTagVars) :-
+        query_ir(register,VsRegs),
+        maplist(mk_tagvar_name,VsRegs,VsTagVars).
+
+get_other_vars([Done, T]) :-
+        done_var(Done),
+        t_var(T).
+
+get_all_vars(VsAllVars) :-
+        get_reg_vars(VsRegVars),
+        get_tag_vars(VsTagVars),
+        get_other_vars(VsOtherVars),
+        flatten([VsRegVars,VsTagVars,VsOtherVars], VsAllVars).

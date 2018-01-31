@@ -15,7 +15,9 @@
 		 negate/2, bb_inc/1,
 		 reset_pred_sym/0,
                  droplist/3,
-                 mk_sum/2
+                 mk_sum/2,
+                 flatten/2,
+                 contains/2
 		], [hidden(true)]).
 :- use_module(library(codesio)).
 :- use_module(library(ordsets)).
@@ -138,3 +140,11 @@ mk_sum([H|T],Res) :-
             fromto(H, In, Out, Res)
         do  Out = In + X
         ).
+
+flatten([], []).
+flatten([H|T], L) :-
+        is_list(H),
+        flatten(T, L2),
+        append(H, L2, L).
+
+contains(List, Elem) :- memberchk(Elem, List).
