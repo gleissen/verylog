@@ -19,20 +19,23 @@
 :- use_module(library(ordsets)).
 :- use_module(library(terms)).
 :- use_module(library(avl)).
+:- use_module(library(lists)).
 
 
-mk_and(true, R, R) :- !.
-mk_and(false, _, false) :- !.
-mk_and(R, true, R) :- !.
-mk_and(_, false, false) :- !.
-mk_and(A, B, (A, B)).
+mk_and(L,R) :- rev(L, L1), mk_and_(L1, R).
 
-mk_and([A1|As], R) :-
-	foreach(A, As),
-	fromto(A1, In, Out, R)
+mk_and_([], true).
+mk_and_([H|T], R) :-
+	foreach(X, T),
+	fromto(H, In, Out, R)
 	do
-	mk_and(A, In, Out).
-mk_and([], true).
+	mk_and(X, In, Out).
+
+mk_and(true,  R,     R)     :- !.
+mk_and(false, _,     false) :- !.
+mk_and(R,     true,  R)     :- !.
+mk_and(_,     false, false) :- !.
+mk_and(A,     B,     (A, B)).
 
 bb_inc(Key) :-
 	bb_get(user:Key, I),
