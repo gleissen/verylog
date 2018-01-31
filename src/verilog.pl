@@ -33,18 +33,16 @@ Creates Horn clause verification conditions from a intermediate language verilog
 %% prints the query_naming predicated required by qarmc
 %% i.e. query_naming(inv(...)).
 mk_query_naming(Res) :-
-        query_ir(register,_Rs),
-        done_atom(Done),
-        t_atom(T),
-        append(_Rs,[Done,T],Rs),
-        (   foreach(S, ['l', 'r']),
-            foreach(And, Ands),
-            param(Rs)
-        do  maplist(add_suffix(S), Rs, Rs1),
-            mk_and(Rs1, And)
+        mk_invariant_vars(Vs),
+        maplist(mk_atom_name, Vs, _VsAtoms),
+        (   foreach(V,_VsAtoms),
+            foreach(V1,VsAtoms)
+        do  ( atom_chars(V, ['v', '_', 'V', '_', 'v', '_'|_]) -> sub_atom(V,4,_,0,V1)
+            ; V1 = V
+            )
         ),
-        [And1, And2] = Ands,
-	format_atom('query_naming(inv(~n    ~p,~n    ~p~n)).', [And1, And2], Res).
+        mk_and(VsAtoms,And),
+        format_atom('query_naming(inv(~p)).', [And], Res).
 
 % mk_init(Res) :-
 % 	mk_invariant_vars('L=0', DefsL),
@@ -80,13 +78,14 @@ mk_next(Res) :-
 	% mk_and(Asn1, Links1, Bd),
 	mk_next_def(Hd),
 	% mk_reset(Reset),
-	mk_next_sink_cond(_Sink), mk_next_sep(_Sink,Sink),
-        mk_next_incr(_Incr),      mk_next_sep(_Incr,Incr),
+	mk_next_sink_cond(_Sink),  mk_next_sep(_Sink,Sink),
+        mk_next_incr(_Incr),       mk_next_sep(_Incr,Incr),
+        mk_next_always(_Always),   mk_next_sep(_Always,Always),
 	% mk_unassigned(Un),
 	% format_atom('Done=1, T1=T, Done1=Done',[], Spin),
 	format_atom(
-                    '~p :=~n(~p,~p~n).',
-                    [Hd, Sink, Incr],
+                    '~p :=~n(~p,~p,~p~n).',
+                    [Hd, Always, Sink, Incr],
                     Res
                    ),
 	% format_atom('~p := ~n(~n Done=0, ~p~n; Done=0, ~p, ~p,~p~n; ~p~n).',[Hd,Reset,Sink,Un,Bd,Spin], Res),
@@ -95,27 +94,57 @@ mk_next(Res) :-
 %% generate the header for the transition relation definition
 %% i.e. next(...)
 mk_next_def(Res) :-
-	mk_invariant_vars('',  Vs),
-	mk_invariant_vars('1', Vs1),
-	mk_and(Vs,  VsAnd),
-	mk_and(Vs1, VsAnd1),
-	format_atom('next(~n    ~p,~n    ~p~n    )', [VsAnd,VsAnd1], Res).
+	mk_invariant_vars(Vs),
+	mk_and(Vs,VsAnd),
+	format_atom('next(~p)', [VsAnd], Res).
 
 %% update done if sink's tag > 0
 %% ite(sink_t >= 1, Done1 = 1, Done1 = Done)
 mk_next_sink_cond(Res) :-
         ( taint_sink(_Sink) -> 
-            mk_var_name(_Sink, Sink),
-            done_var(Done), mk_primed_var(Done,Done1),
-            mk_primed_var(Sink,Sink1),
+            mk_tagvar_name(_Sink, Sink), mk_primed(Sink,Sink1),
+            done_var(Done), mk_primed(Done,Done1),
             format_atom('ite(~p >= 1, ~p = 1, ~p = ~p)',[Sink1, Done1, Done1, Done], Res)
         ; print('no taink_sink predicate !'), halt(1)
         ).
 
 %% generates the line for 'Done = 0, T1 = T + 1'
 mk_next_incr(Res) :-
-        done_var(Done), t_var(T), mk_primed_var(T,T1),
+        done_var(Done), t_var(T), mk_primed(T,T1),
         format_atom('~p = 0, ~p = ~p + 1', [Done, T1, T], Res).
+
+%% processes the statements inside the always blocks
+mk_next_always(Res) :-
+        query_ir(always, Stmts),
+        (   foreach(_-Stmt, Stmts),
+            foreach(StmtRes,AllStmtRes),
+            param(AllStmtRes)
+        do  Stmt =.. [Name|Args],
+            mk_next_stmt(Name,Args,_StmtRes),
+            mk_next_sep(_StmtRes, StmtRes)
+        ),
+        mk_and(AllStmtRes,_Res),
+        format_atom('~p', [_Res], Res).
+
+mk_next_stmt(Type,Args,Res) :-
+        ( ir_stmt(L), memberchk(Type, L) -> true
+        ; format('~p is not a valid statement !~n', [Type]), halt(1)
+        ),
+        mk_next_stmt_helper(Type,Args,Res).
+
+mk_next_stmt_helper(nb_asn, [L,R], Res) :-
+        !,
+        mk_var_name(L,LV), mk_primed(LV,LV1),
+        mk_var_name(R,RV),
+        mk_tagvar_name(L,LT), mk_primed(LT,LT1),
+        mk_tagvar_name(R,RT),
+        format_atom('~p = ~p, ~p = ~p', [LT1, RT, LV1, RV], Res).
+
+mk_next_stmt_helper(ite, [Cond, Then, Else], Res) :-
+        Res = 'ite_is_missing'.
+
+mk_next_stmt_helper(Type, _, _) :-
+        format('~p is not yet implemented~n', [Type]), halt(1).
 
 % mk_assignments(Res) :-
 %         query_ir(nb_asn, Ls),
@@ -166,17 +195,19 @@ mk_next_sep(P,Res) :-
 %% ### INVARIANTS ##############################################################
 %% #############################################################################
 
-mk_invariant_vars(Suffix, Vs1) :-
-        query_ir(register,__Vs),
-        maplist(mk_var_name, __Vs, _Vs),
+mk_invariant_vars(Vs) :-
+        mk_invariant_vars_helper(Vars),
+        maplist(mk_primed, Vars, Vars1),
+        append(Vars,Vars1,Vs).
+
+mk_invariant_vars_helper(VsAllVars) :-
+        query_ir(register,VsRegs),
+        maplist(mk_var_name,VsRegs,VsRegVars),
+        maplist(mk_tag_name,VsRegVars,VsRegVarsT),
+        append(VsRegVars,VsRegVarsT,VsMostVars),
         done_var(Done),
         t_var(T),
-        append(_Vs, [Done, T], Vs),
-	(   foreach(V, Vs),
-	    foreach(V1, Vs1),
-	    param(Suffix)
-	do format_atom('~p~p', [V, Suffix], V1)
-	).
+        append(VsMostVars, [Done, T], VsAllVars).
 
 % mk_invariant(Suffix, Res) :-
 % 	mk_invariant_vars(Suffix, Vs1),
@@ -235,11 +266,8 @@ main :-
 runInput(Input) :-
         % print_file(Input),
         my_consult(Input),
-
 	mk_output_file(Res),
-
-	format('~p',[Res]),
-        true.
+	format('~p',[Res]).
         
 my_consult(File) :-
         % flush_db,
@@ -258,9 +286,15 @@ test :-
 %% ### UTILITY PREDICATES ######################################################
 %% #############################################################################
 
-ir_list(L) :- L = [register, wire, link, always,
-                   nb_asn,
-                   taint_source, taint_sink].
+ir_stmt([
+         nb_asn,
+         ite
+        ]).
+
+ir_list([
+         register, wire, link, always,
+         taint_source, taint_sink
+        ]).
 
 done_var('Done').
 done_atom('done').
@@ -293,7 +327,17 @@ add_prefix(P,X,X1) :-
 mk_var_name(ID, VarName) :-
         add_prefix('V_', ID, VarName).
 
-mk_primed_var(X,X1) :-
+mk_tag_name(ID, VarName) :-
+        add_suffix('_t', ID, VarName).
+
+mk_tagvar_name(ID, TagVarName) :-
+        mk_var_name(ID, VarName),
+        mk_tag_name(VarName, TagVarName).
+
+mk_atom_name(ID, AtomName) :-
+        add_prefix('v_', ID, AtomName).
+
+mk_primed(X,X1) :-
         add_suffix('1', X, X1).
 
 mk_ite(Cond,Then,Else,Res) :-

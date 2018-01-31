@@ -13,7 +13,8 @@
 		 format_atom/3,
 		 copy_instantiate/4,
 		 negate/2, bb_inc/1,
-		 reset_pred_sym/0
+		 reset_pred_sym/0,
+                 droplist/3
 		], [hidden(true)]).
 :- use_module(library(codesio)).
 :- use_module(library(ordsets)).
