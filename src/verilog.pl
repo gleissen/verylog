@@ -162,11 +162,12 @@ mk_next_module_inst(Res) :-
         maplist(mk_next_sep, Ms, Ms2),
         mk_and(Ms2,Res).
 
+%% just updates the tags to the sum of the inputs
 mk_next_module_helper(_Name-Inputs-Outputs,Res) :-
         maplist(mk_tagvar_name,Inputs,InputVars),
         (   foreach(O, Outputs),
             foreach(R, Rs),
-            param(Inputs)
+            param(InputVars)
         do  mk_sum(InputVars, Rhs),
             mk_tagvarprimed_name(O, Lhs),
             format_atom('~p = ~p', [Lhs, Rhs], _R),
@@ -327,6 +328,10 @@ dot([H|T],In,Out) :-
         current_predicate(H,F),
         functor(F,N,2),
         call(N, _Out, Out).
+
+%% #############################################################################
+%% ### OLD CODE ################################################################
+%% #############################################################################
 
 % mk_assignments(Res) :-
 %         query_ir(nb_asn, Ls),
