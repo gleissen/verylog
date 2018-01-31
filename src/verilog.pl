@@ -81,9 +81,7 @@ mk_next_helper_predicates(Res) :-
         (   foreach(P, HelperPredicates),
             foreach(R, Rs),
             param(Rs)
-        do  current_predicate(P,F),
-            functor(F,N,1),
-            call(N,_R),
+        do  call(P,_R),
             format_atom('~p~n~n', [_R], R)
         ),
         mk_and(Rs,Res).
@@ -198,15 +196,13 @@ mk_next_vars(Vs) :-
         
 
 %% #############################################################################
-%% ### INVARIANTS ##############################################################
+%% ### VERIFICATION CONDITION GENERATION #######################################
 %% #############################################################################
 
 mk_vcs(Res) :-
         mk_vcs_init(InvInit),
-
-        Parts = [InvInit],
-        maplist(dot([mk_nl,mk_nl]), Parts, _Res),
-        mk_and(_Res, Res).
+        mk_vcs_main(InvMain),
+        format_atom('~p ~n~n~p', [InvInit, InvMain], Res).
 
 mk_vcs_init(Res) :-
 	mk_vcs_vars(VcsVars),
@@ -257,6 +253,13 @@ mk_vcs_init(Res) :-
         mk_and(_VsBody, VsBody),
 
 	format_atom('inv(~p) :- ~p.', [VsArgs, VsBody], Res).
+
+mk_vcs_main(Res) :-
+	mk_vcs_vars(VcsVars),
+	mk_and(VcsVars,VsArgs),
+
+	format_atom('inv(~p) :- true.', [VsArgs], Res).
+
 
 mk_vcs_vars(Vs) :-
         get_all_vars(AllVars),
@@ -328,7 +331,7 @@ t_var('T').
 t_atom('t').
 
 query_ir(P, Ls) :-
-        ( findall(F, current_predicate(P,F), Fs), length(Fs, N), N > 1 ->
+        ( findall(F, current_predicate(P,F), [_,_|_]) ->
             format('~p has multiple arities !', [P]), halt(1)
         ; ir_list(IR), \+ memberchk(P, IR) ->
             format('~p does not belong to the IR !', [P]), halt(1)
@@ -392,11 +395,6 @@ dot([],In,In).
 dot([H|T],In,Out) :-
         dot(T, In, _Out),
         call(H, _Out, Out).
-        % current_predicate(H,F),
-        % functor(F,N,A),
-        % ( A = 2 -> call(N, _Out, Out)
-        % ; format('arity of ~p is not 2', [H]), halt
-        % ).
 
 get_reg_vars(VsRegVars) :-
         query_ir(register,VsRegs),
