@@ -35,7 +35,7 @@ Creates Horn clause verification conditions from a intermediate language verilog
 %% prints the query_naming predicated required by qarmc
 %% i.e. query_naming(inv(...)).
 mk_query_naming(Res) :-
-        mk_invariant_vars(Vs),
+        mk_vcs_vars(Vs),
         maplist(mk_atom_name, Vs, _VsAtoms),
         (   foreach(V,_VsAtoms),
             foreach(V1,VsAtoms)
@@ -90,7 +90,7 @@ mk_next_helper_predicates(Res) :-
 %% generate the header for the transition relation definition
 %% i.e. next(...)
 mk_next_def(Res) :-
-	mk_invariant_vars(Vs),
+	mk_next_vars(Vs),
 	mk_and(Vs,VsAnd),
 	format_atom('next(~p)', [VsAnd], Res).
 
@@ -189,16 +189,12 @@ mk_next_helper_assign_op(Res) :-
 mk_next_sep(P,Res) :-
         format_atom('~n  ~p', [P], Res).
 
-%% #############################################################################
-%% ### INVARIANTS ##############################################################
-%% #############################################################################
-
-mk_invariant_vars(Vs) :-
-        mk_invariant_vars_helper(Vars),
+mk_next_vars(Vs) :-
+        mk_next_vars_helper(Vars),
         maplist(mk_primed, Vars, Vars1),
         append(Vars,Vars1,Vs).
 
-mk_invariant_vars_helper(VsAllVars) :-
+mk_next_vars_helper(VsAllVars) :-
         query_ir(register,VsRegs),
         maplist(mk_var_name,VsRegs,VsRegVars),
         maplist(mk_tag_name,VsRegVars,VsRegVarsT),
@@ -206,6 +202,28 @@ mk_invariant_vars_helper(VsAllVars) :-
         done_var(Done),
         t_var(T),
         append(VsMostVars, [Done, T], VsAllVars).
+
+%% #############################################################################
+%% ### INVARIANTS ##############################################################
+%% #############################################################################
+
+mk_vcs(Res) :-
+        mk_vcs_init(InvInit),
+
+        Parts = [InvInit],
+        maplist(dot([mk_nl,mk_nl]), Parts, _Res),
+        mk_and(_Res, Res).
+
+mk_vcs_init(Res) :-
+	mk_vcs_vars(Vs),
+	mk_and(Vs,VsAnd),
+	format_atom('inv(~p) :- true.', [VsAnd], Res).
+
+mk_vcs_vars(Vs) :-
+        mk_next_vars_helper(AllVars),
+        maplist(add_suffix('L'), AllVars, LeftVars),
+        maplist(add_suffix('R'), AllVars, RightVars),
+        append(LeftVars,RightVars,Vs).
 
 %% #############################################################################
 %% ### RUNNING #################################################################
@@ -220,9 +238,9 @@ mk_output_file(Res) :-
 	mk_next(Next),
         format_atom('~p', [Next], Res1),
 
-        Res2 = '',
-	% mk_vcs(Vcs),
-        % format_atom('~p', [Vcs], Res2),
+        % Res2 = '',
+	mk_vcs(Vcs),
+        format_atom('~p', [Vcs], Res2),
 
         format_atom('~n~n~p~n~n~p~n~n~p', [Res0, Res1, Res2], Res),
         true.
@@ -310,6 +328,9 @@ mk_atom_name(ID, AtomName) :-
 mk_primed(X,X1) :-
         add_suffix('1', X, X1).
 
+mk_nl(X,X1) :-
+        format_atom('~p~n', [X], X1).
+
 mk_ite(Cond,Then,Else,Res) :-
         format_atom('ite(~p, ~p, ~p)', [Cond, Then, Else], Res).
 
@@ -328,100 +349,4 @@ dot([H|T],In,Out) :-
         current_predicate(H,F),
         functor(F,N,2),
         call(N, _Out, Out).
-
-%% #############################################################################
-%% ### OLD CODE ################################################################
-%% #############################################################################
-
-% mk_assignments(Res) :-
-%         query_ir(nb_asn, Ls),
-%         (   foreach(X-Y, Ls),
-%             foreach(Rel, Res)
-%         do  mk_var_name(X, XV),
-%             mk_var_name(Y, YV),
-%             assert(assigned(Y)),
-%             format_atom("~p=~p1",[XV,YV], Rel)
-%         ).
-
-% mk_links(Res) :-
-%         query_ir(link, Ls),
-% 	(   foreach(X-Y-Z, Ls),
-% 	    foreach(Rel, Res)
-% 	do  mk_var_name(X, XV),
-% 	    mk_var_name(Y, YV),
-% 	    mk_var_name(Z, ZV),
-% 	    assert(assigned(Z)),
-% 	    format_atom("ite((~p=1; ~p=1), ~p1=1, ~p1=0)",[XV,YV,ZV,ZV], Rel)
-% 	).
-
-% mk_unassigned(Res) :-
-% 	findall(X, (query_ir(register,Rs), memberchk(X, Rs), \+assigned(X)), Vs),
-% 	(   foreach(V, Vs),
-% 	    foreach(Def, Defs)
-% 	do  mk_var_name(V, VN),
-% 	    format_atom('~p1=0',[VN], Def)
-% 	),
-% 	mk_and(Defs, Res).
-
-% mk_reset(Res) :-
-%         query_ir(register,Vs),
-% 	(   foreach(V, Vs),
-% 	    fromto('', In, Out, Defs)
-% 	do  mk_var_name(V, VN),
-% 	    (   taint_source(V)->
-% 		format_atom('~p (~p1=1;~p1=0), ',[In,VN,VN], Out)
-% 	    ;   format_atom('~p ~p1=0, ',[In,VN], Out)
-% 	    )
-% 	),
-% 	format_atom('~p Done1=0', [Defs], Res).
-
-% mk_init(Res) :-
-% 	mk_invariant_vars('L=0', DefsL),
-% 	mk_invariant_vars('R=0', DefsR),
-% 	mk_and(DefsL, DefsL1),
-% 	mk_and(DefsR, DefsR1),
-% 	format_atom('~p,DoneL = 0, ~p, DoneR=0.',[DefsL1,DefsR1], Res).
-
-% mk_property(Res) :-
-% 	mk_relational_invariant(Inv),
-% 	format_atom('DoneR=1 :- ~p, DoneL=1.', [Inv], Res).
-
-
-% mk_vcs(Res) :-
-% 	mk_init(Init),
-% 	mk_relational_invariant(Inv),
-% 	mk_primed_relational_invariant(Inv1),
-% 	mk_next_def('L', NextL),
-% 	mk_next_def('R', NextR),
-% 	mk_property(Prop),
-% 	format_atom('~p:-~p~n~p :- ~p,~n~p,~n~p.~n~p~n',[Inv,Init,Inv1,NextL,NextR,Inv,Prop], Res).
-
-
-% mk_invariant(Suffix, Res) :-
-% 	mk_invariant_vars(Suffix, Vs1),
-% 	mk_and(Vs1, Vs2),  
-% 	format_atom('inv(~p, Done~p, T~p)', [Vs2, Suffix, Suffix], Res).
-
-% mk_invariant(Res) :-
-% 	mk_invariant('', Res).
-
-% mk_primed_invariant(Res) :-
-% 	mk_invariant('1', Res).
-
-% mk_relational_invariant(Res) :-
-% 	mk_relational_invariant('',Res).
-
-% mk_primed_relational_invariant(Res) :-
-% 	mk_relational_invariant('1', Res).
-
-% mk_relational_invariant(Suffix, Res) :-
-% 	format_atom('L~p', [Suffix], SuffixL),
-% 	format_atom('R~p', [Suffix], SuffixR),
-% 	mk_invariant_vars(SuffixL, VLs),
-% 	mk_invariant_vars(SuffixR, VRs),
-% 	format_atom('DoneL~p', [Suffix], DoneL),
-% 	format_atom('DoneR~p', [Suffix], DoneR),
-% 	append([DoneR|VRs], [DoneL|VLs], V1s),
-% 	mk_and(V1s, Vs2),  
-% 	format_atom('inv(~p)', [Vs2], Res).
 
