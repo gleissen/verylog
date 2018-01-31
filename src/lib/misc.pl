@@ -14,14 +14,14 @@
 		 copy_instantiate/4,
 		 negate/2, bb_inc/1,
 		 reset_pred_sym/0,
-                 droplist/3
+                 droplist/3,
+                 mk_sum/2
 		], [hidden(true)]).
 :- use_module(library(codesio)).
 :- use_module(library(ordsets)).
 :- use_module(library(terms)).
 :- use_module(library(avl)).
 :- use_module(library(lists)).
-
 
 mk_and(L,R) :- rev(L, L1), mk_and_(L1, R).
 
@@ -127,3 +127,14 @@ negate(A=B, A\==B).
 negate(A==B, A\==B).
 negate(A\==B, A==B).
 negate(A=\=B, A==B).
+
+mk_sum([],_) :-
+        format('empty list is given to mk_sum', []),
+        halt(1).
+
+mk_sum([H|T],Res) :-
+        % rev(L, [H|T]),
+        (   foreach(X, T),
+            fromto(H, In, Out, Res)
+        do  Out = In + X
+        ).

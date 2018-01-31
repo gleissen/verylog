@@ -3,7 +3,9 @@
 :- use_module('lib/misc.pl', [format_atom/3,
 			      get_fresh_num/1,
 			      mk_and/2,
-			      mk_and/3]).
+			      mk_and/3,
+                              mk_sum/2
+                              ]).
 
 :- use_module('lib/utils.pl').
 :- use_module(library(lists)).
@@ -44,26 +46,6 @@ mk_query_naming(Res) :-
         mk_and(VsAtoms,And),
         format_atom('query_naming(inv(~p)).', [And], Res).
 
-% mk_init(Res) :-
-% 	mk_invariant_vars('L=0', DefsL),
-% 	mk_invariant_vars('R=0', DefsR),
-% 	mk_and(DefsL, DefsL1),
-% 	mk_and(DefsR, DefsR1),
-% 	format_atom('~p,DoneL = 0, ~p, DoneR=0.',[DefsL1,DefsR1], Res).
-
-% mk_property(Res) :-
-% 	mk_relational_invariant(Inv),
-% 	format_atom('DoneR=1 :- ~p, DoneL=1.', [Inv], Res).
-
-
-% mk_vcs(Res) :-
-% 	mk_init(Init),
-% 	mk_relational_invariant(Inv),
-% 	mk_primed_relational_invariant(Inv1),
-% 	mk_next_def('L', NextL),
-% 	mk_next_def('R', NextR),
-% 	mk_property(Prop),
-% 	format_atom('~p:-~p~n~p :- ~p,~n~p,~n~p.~n~p~n',[Inv,Init,Inv1,NextL,NextR,Inv,Prop], Res).
 
 %% #############################################################################
 %% ### TRANSITION RELATION #####################################################
@@ -71,26 +53,25 @@ mk_query_naming(Res) :-
 
 mk_next(Res) :-
         mk_next_helper_predicates(Helper),
-	% mk_assignments(Asn),
-	% mk_links(Links),
-	% % Links=[],
-	% mk_and(Asn, Asn1),
-	% mk_and(Links, Links1),
-	% mk_and(Asn1, Links1, Bd),
 	mk_next_def(Hd),
-	% mk_reset(Reset),
-	mk_next_sink_cond(_Sink),   mk_next_sep(_Sink,Sink),
-        mk_next_incr(_Incr),        mk_next_sep(_Incr,Incr),
-        mk_next_always(_Always),    mk_next_sep(_Always,Always),
-        mk_next_module_inst(_Inst), mk_next_sep(_Inst,Inst),
-	% mk_unassigned(Un),
-	% format_atom('Done=1, T1=T, Done1=Done',[], Spin),
+
+        mk_next_always(_Always),
+        mk_next_sep(_Always,Always),
+
+        mk_next_module_inst(_Module),
+        mk_next_sep(_Module,Module),
+
+	mk_next_sink_cond(_Sink),
+        mk_next_sep(_Sink,Sink),
+
+        mk_next_incr(_Incr),
+        mk_next_sep(_Incr,Incr),
+
 	format_atom(
-                    '~p~p :=~n(~p,~p,~n~p,~n~p~n).',
-                    [Helper, Hd, Always, Inst, Sink, Incr],
+                    '~p~p :=~n(~p, ~p,~n~n~p,~n~p~n).',
+                    [Helper, Hd, Always, Module, Sink, Incr],
                     Res
                    ),
-	% format_atom('~p := ~n(~n Done=0, ~p~n; Done=0, ~p, ~p,~p~n; ~p~n).',[Hd,Reset,Sink,Un,Bd,Spin], Res),
         true.
 
 mk_next_helper_predicates(Res) :-
@@ -128,87 +109,70 @@ mk_next_incr(Res) :-
         done_var(Done), t_var(T), mk_primed(T,T1),
         format_atom('~p = 0, ~p = ~p + 1', [Done, T1, T], Res).
 
-%% processes the statements inside the always blocks
+%% generate the TR for the statements inside the always blocks
 mk_next_always(Res) :-
         query_ir(always, Stmts),
         (   foreach(_-Stmt, Stmts),
             foreach(StmtRes,AllStmtRes),
             param(AllStmtRes)
-        do  Stmt =.. [Name|Args],
-            mk_next_stmt(Name,Args,_StmtRes),
+        do  mk_next_stmt(Stmt,_StmtRes),
             mk_next_sep(_StmtRes, StmtRes)
         ),
-        mk_and(AllStmtRes,_Res),
-        format_atom('~p', [_Res], Res).
+        maplist(mk_next_sep,AllStmtRes,_Res),
+        mk_and(_Res,Res).
 
-mk_next_stmt(Type,Args,Res) :-
-        ( ir_stmt(L), memberchk(Type, L) -> true
-        ; format('~p is not a valid statement !~n', [Type]), halt(1)
-        ),
-        mk_next_stmt_helper(Type,Args,Res).
+%% generate the TR for the statement of the format Type(Args...)
+mk_next_stmt(Stmt,Res) :-
+        (   Stmt =.. [Type|Args] ->
+            ( ir_stmt(L), memberchk(Type, L) -> true
+            ; format('~p is not a valid statement !~n', [Type]), halt(1)
+            ),
+            mk_next_stmt_helper(Type,Args,Res)
+        ;   format('~p is not a valid statement !', [Stmt]),
+            halt(1)
+        ).
 
+%% generate the TR for process a non-blocking assignment
 mk_next_stmt_helper(nb_asn, [L,R], Res) :-
         mk_next_assign_op(L,R,Res).
 
+%% generate the TR for an if statement
 mk_next_stmt_helper(ite, [Cond, Then, Else], Res) :-
-        format_atom('~p ? ~p : ~p', [Cond, Then, Else], _Res),
-        missing_atom(_Res, Res).
+        mk_next_ite_cond(Cond,CondT,CondF),
+        mk_next_stmt(Then, ThenRes),
+        mk_next_stmt(Else, ElseRes),
+        format_atom('((~p) -> (~p) ; (~p) -> (~p))', [CondT, ThenRes, CondF, ElseRes], Res).
 
 mk_next_stmt_helper(Type, _, _) :-
         format('~p is not yet implemented~n', [Type]), halt(1).
 
+mk_next_ite_cond(Cond, ResT, ResF) :-
+        (   \+ atom(Cond) ->
+            format('only atomic if conditions are supported (i.e. not ~p))', [Cond]),
+            halt(1)
+        ;   mk_var_name(Cond,CondV),
+            format_atom('~p >= 1', [CondV], ResT),
+            format_atom('~p  = 0', [CondV], ResF)
+        ).
+
+%% generate the TR for a module instantiation
 mk_next_module_inst(Res) :-
         query_ir(module_inst, Modules),
         maplist(mk_next_module_helper, Modules, Ms),
         maplist(mk_next_sep, Ms, Ms2),
-        mk_and(Ms2,Ms3),
-        format_atom('~p', [Ms3], Res).
+        mk_and(Ms2,Res).
 
-mk_next_module_helper(Name-Inputs-Outputs,Res) :-
-        format_atom('~p(~p,~p)', [Name, Inputs, Outputs], _Res),
-        missing_atom(_Res, Res).
-
-% mk_assignments(Res) :-
-%         query_ir(nb_asn, Ls),
-%         (   foreach(X-Y, Ls),
-%             foreach(Rel, Res)
-%         do  mk_var_name(X, XV),
-%             mk_var_name(Y, YV),
-%             assert(assigned(Y)),
-%             format_atom("~p=~p1",[XV,YV], Rel)
-%         ).
-
-% mk_links(Res) :-
-%         query_ir(link, Ls),
-% 	(   foreach(X-Y-Z, Ls),
-% 	    foreach(Rel, Res)
-% 	do  mk_var_name(X, XV),
-% 	    mk_var_name(Y, YV),
-% 	    mk_var_name(Z, ZV),
-% 	    assert(assigned(Z)),
-% 	    format_atom("ite((~p=1; ~p=1), ~p1=1, ~p1=0)",[XV,YV,ZV,ZV], Rel)
-% 	).
-
-% mk_unassigned(Res) :-
-% 	findall(X, (query_ir(register,Rs), memberchk(X, Rs), \+assigned(X)), Vs),
-% 	(   foreach(V, Vs),
-% 	    foreach(Def, Defs)
-% 	do  mk_var_name(V, VN),
-% 	    format_atom('~p1=0',[VN], Def)
-% 	),
-% 	mk_and(Defs, Res).
-
-% mk_reset(Res) :-
-%         query_ir(register,Vs),
-% 	(   foreach(V, Vs),
-% 	    fromto('', In, Out, Defs)
-% 	do  mk_var_name(V, VN),
-% 	    (   taint_source(V)->
-% 		format_atom('~p (~p1=1;~p1=0), ',[In,VN,VN], Out)
-% 	    ;   format_atom('~p ~p1=0, ',[In,VN], Out)
-% 	    )
-% 	),
-% 	format_atom('~p Done1=0', [Defs], Res).
+mk_next_module_helper(_Name-Inputs-Outputs,Res) :-
+        maplist(mk_tagvar_name,Inputs,InputVars),
+        (   foreach(O, Outputs),
+            foreach(R, Rs),
+            param(Inputs)
+        do  mk_sum(InputVars, Rhs),
+            mk_tagvarprimed_name(O, Lhs),
+            format_atom('~p = ~p', [Lhs, Rhs], _R),
+            mk_next_sep(_R,R)
+        ),
+        mk_and(Rs,Res).
 
 mk_next_assign_op(L,R,Res) :-
         !,
@@ -242,36 +206,6 @@ mk_invariant_vars_helper(VsAllVars) :-
         t_var(T),
         append(VsMostVars, [Done, T], VsAllVars).
 
-% mk_invariant(Suffix, Res) :-
-% 	mk_invariant_vars(Suffix, Vs1),
-% 	mk_and(Vs1, Vs2),  
-% 	format_atom('inv(~p, Done~p, T~p)', [Vs2, Suffix, Suffix], Res).
-
-% mk_invariant(Res) :-
-% 	mk_invariant('', Res).
-
-% mk_primed_invariant(Res) :-
-% 	mk_invariant('1', Res).
-
-% mk_relational_invariant(Res) :-
-% 	mk_relational_invariant('',Res).
-
-% mk_primed_relational_invariant(Res) :-
-% 	mk_relational_invariant('1', Res).
-
-% mk_relational_invariant(Suffix, Res) :-
-% 	format_atom('L~p', [Suffix], SuffixL),
-% 	format_atom('R~p', [Suffix], SuffixR),
-% 	mk_invariant_vars(SuffixL, VLs),
-% 	mk_invariant_vars(SuffixR, VRs),
-% 	format_atom('DoneL~p', [Suffix], DoneL),
-% 	format_atom('DoneR~p', [Suffix], DoneR),
-% 	append([DoneR|VRs], [DoneL|VLs], V1s),
-% 	mk_and(V1s, Vs2),  
-% 	format_atom('inv(~p)', [Vs2], Res).
-
-
-
 %% #############################################################################
 %% ### RUNNING #################################################################
 %% #############################################################################
@@ -280,10 +214,6 @@ mk_output_file(Res) :-
         % Res0 = '',
 	mk_query_naming(Naming),
         format_atom('~p', [Naming], Res0),
-
-
-            
-            
 
         % Res1 = '',
 	mk_next(Next),
@@ -368,8 +298,10 @@ mk_tag_name(ID, VarName) :-
         add_suffix('_t', ID, VarName).
 
 mk_tagvar_name(ID, TagVarName) :-
-        mk_var_name(ID, VarName),
-        mk_tag_name(VarName, TagVarName).
+        dot([mk_var_name, mk_tag_name], ID, TagVarName).
+
+mk_tagvarprimed_name(ID, TagVarName) :-
+        dot([mk_primed, mk_var_name, mk_tag_name], ID, TagVarName).
 
 mk_atom_name(ID, AtomName) :-
         add_prefix('v_', ID, AtomName).
@@ -388,3 +320,103 @@ inline_comment(P, Comment) :-
         atom_codes(CB, "/*"),
         atom_codes(CE, "*/"),
         format_atom('~p ~p ~p', [CB, P, CE], Comment).
+
+dot([],In,In).
+dot([H|T],In,Out) :-
+        dot(T, In, _Out),
+        current_predicate(H,F),
+        functor(F,N,2),
+        call(N, _Out, Out).
+
+% mk_assignments(Res) :-
+%         query_ir(nb_asn, Ls),
+%         (   foreach(X-Y, Ls),
+%             foreach(Rel, Res)
+%         do  mk_var_name(X, XV),
+%             mk_var_name(Y, YV),
+%             assert(assigned(Y)),
+%             format_atom("~p=~p1",[XV,YV], Rel)
+%         ).
+
+% mk_links(Res) :-
+%         query_ir(link, Ls),
+% 	(   foreach(X-Y-Z, Ls),
+% 	    foreach(Rel, Res)
+% 	do  mk_var_name(X, XV),
+% 	    mk_var_name(Y, YV),
+% 	    mk_var_name(Z, ZV),
+% 	    assert(assigned(Z)),
+% 	    format_atom("ite((~p=1; ~p=1), ~p1=1, ~p1=0)",[XV,YV,ZV,ZV], Rel)
+% 	).
+
+% mk_unassigned(Res) :-
+% 	findall(X, (query_ir(register,Rs), memberchk(X, Rs), \+assigned(X)), Vs),
+% 	(   foreach(V, Vs),
+% 	    foreach(Def, Defs)
+% 	do  mk_var_name(V, VN),
+% 	    format_atom('~p1=0',[VN], Def)
+% 	),
+% 	mk_and(Defs, Res).
+
+% mk_reset(Res) :-
+%         query_ir(register,Vs),
+% 	(   foreach(V, Vs),
+% 	    fromto('', In, Out, Defs)
+% 	do  mk_var_name(V, VN),
+% 	    (   taint_source(V)->
+% 		format_atom('~p (~p1=1;~p1=0), ',[In,VN,VN], Out)
+% 	    ;   format_atom('~p ~p1=0, ',[In,VN], Out)
+% 	    )
+% 	),
+% 	format_atom('~p Done1=0', [Defs], Res).
+
+% mk_init(Res) :-
+% 	mk_invariant_vars('L=0', DefsL),
+% 	mk_invariant_vars('R=0', DefsR),
+% 	mk_and(DefsL, DefsL1),
+% 	mk_and(DefsR, DefsR1),
+% 	format_atom('~p,DoneL = 0, ~p, DoneR=0.',[DefsL1,DefsR1], Res).
+
+% mk_property(Res) :-
+% 	mk_relational_invariant(Inv),
+% 	format_atom('DoneR=1 :- ~p, DoneL=1.', [Inv], Res).
+
+
+% mk_vcs(Res) :-
+% 	mk_init(Init),
+% 	mk_relational_invariant(Inv),
+% 	mk_primed_relational_invariant(Inv1),
+% 	mk_next_def('L', NextL),
+% 	mk_next_def('R', NextR),
+% 	mk_property(Prop),
+% 	format_atom('~p:-~p~n~p :- ~p,~n~p,~n~p.~n~p~n',[Inv,Init,Inv1,NextL,NextR,Inv,Prop], Res).
+
+
+% mk_invariant(Suffix, Res) :-
+% 	mk_invariant_vars(Suffix, Vs1),
+% 	mk_and(Vs1, Vs2),  
+% 	format_atom('inv(~p, Done~p, T~p)', [Vs2, Suffix, Suffix], Res).
+
+% mk_invariant(Res) :-
+% 	mk_invariant('', Res).
+
+% mk_primed_invariant(Res) :-
+% 	mk_invariant('1', Res).
+
+% mk_relational_invariant(Res) :-
+% 	mk_relational_invariant('',Res).
+
+% mk_primed_relational_invariant(Res) :-
+% 	mk_relational_invariant('1', Res).
+
+% mk_relational_invariant(Suffix, Res) :-
+% 	format_atom('L~p', [Suffix], SuffixL),
+% 	format_atom('R~p', [Suffix], SuffixR),
+% 	mk_invariant_vars(SuffixL, VLs),
+% 	mk_invariant_vars(SuffixR, VRs),
+% 	format_atom('DoneL~p', [Suffix], DoneL),
+% 	format_atom('DoneR~p', [Suffix], DoneR),
+% 	append([DoneR|VRs], [DoneL|VLs], V1s),
+% 	mk_and(V1s, Vs2),  
+% 	format_atom('inv(~p)', [Vs2], Res).
+
