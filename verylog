@@ -1,11 +1,29 @@
 #!/bin/zsh
 
 THIS_DIR=${0:A:h}
-APP=$THIS_DIR/verylog
-INTERPRETER=${INTERPRETER:-true}
+APP=$THIS_DIR/vcgen
 
-if [[ $# -eq 0 ]]; then
-    echo "usage: $0 [parser options] <verilog file>"
+zparseopts -D -E -- \
+           -no-interpreter=NO_INTERPRETER -just-ir=JUST_IR -just-vcgen=JUST_VCGEN \
+           M:=TOPLEVEL_MODULE \
+           h=HELP -help=HELP
+
+if [[ $# -eq 0 || -n "$HELP" ]]; then
+    echo "usage: $0 [options] <verilog file>"
+    echo "
+verylog options:
+  --just-ir
+      Just generate the IR file and print it
+  --just-vcgen
+      Just generate the file that will be fed to qarmc and print it
+  --no-interpreter
+      Build the sicstus program rather than interpreting it
+  -h, --help
+      Prints this help
+
+parser options:
+  -M <toplevel module name>
+      When the verilog file contains multiple modules, this is used to denote the toplevel one"
     exit 1
 fi
 
@@ -61,7 +79,7 @@ print_IR() {
 IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
 HSF_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
 
-print_IR $@ > $IR_FILE
+print_IR $TOPLEVEL_MODULE > $IR_FILE
 last_err=$?
 
 if [[ $last_err -ne 0 ]]; then
@@ -69,7 +87,12 @@ if [[ $last_err -ne 0 ]]; then
     exit 1
 fi
 
-if $INTERPRETER; then
+if [[ -n "$JUST_IR" ]]; then
+    cat $IR_FILE
+    exit 0
+fi
+
+if [[ -z "${NO_INTERPRETER}" ]]; then
     pushd $THIS_DIR
 
     sicstus \
@@ -90,7 +113,7 @@ if $INTERPRETER; then
 
     popd
 else
-    if make -s && $APP $IR_FILE > $HSF_FILE
+    if make -s -C ${THIS_DIR} && $APP $IR_FILE > $HSF_FILE
     then
         rm -f $LOGFILE
     else
@@ -98,6 +121,12 @@ else
         cat $LOGFILE
         exit 1 
     fi
+fi
+
+if [[ -n "$JUST_VCGEN" ]]; then
+    cat $HSF_FILE
+    echo
+    exit 0
 fi
 
 echo '################################################################################'
@@ -108,3 +137,4 @@ echo "HSF file : ${HSF_FILE}"
 echo '################################################################################'
 
 $QARMC $HSF_FILE
+

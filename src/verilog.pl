@@ -129,7 +129,7 @@ mk_next(Res) :-
         mk_next_sep(_Incr,Incr),
 
 	format_atom(
-                    '~p~p :=~n(~p, ~p,~n~n~p,~n~p~n).',
+                    '~p~p :=~n(~p,~p,~p,~p~n).',
                     [Helper, Hd, Always, Module, Sink, Incr],
                     Res
                    ),

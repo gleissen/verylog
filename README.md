@@ -8,7 +8,17 @@ fill the missing parts.
 ## Command Line Options
 
 ``` sh
-run [parser options] <verilog file>
+verylog [options] <verilog file>
+
+verylog options:
+  --just-ir
+      Just generate the IR file and print it
+  --just-vcgen
+      Just generate the file that will be fed to qarmc and print it
+  --no-interpreter
+      Build the sicstus program rather than interpreting it
+  -h, --help
+      Prints this help
 
 parser options:
   -M <toplevel module name>
@@ -18,5 +28,5 @@ parser options:
 ### Example
 
 ```sh
-./run -M stalling_cpu examples/verilog/stall.v
+./verylog -M stalling_cpu examples/verilog/stall.v
 ```

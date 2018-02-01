@@ -1,4 +1,4 @@
-APP=verylog
+APP=vcgen
 MAIN_FILE=src/verilog.pl
 OTHER_FILES=$(wildcard src/lib/*.pl)
 
@@ -15,4 +15,4 @@ $(APP): $(APP).sav
 $(APP).sav: $(MAIN_FILE) $(OTHER_FILES)
 	sicstus --goal "compile('$<'), save_program('$(APP).sav'), halt."
 clean :
-	rm $(APP) $(APP).sav
+	rm -f $(APP) $(APP).sav

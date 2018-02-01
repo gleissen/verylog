@@ -1,5 +1,5 @@
-verylog
-verylog.sav
+vcgen
+*.sav
 .log.*
 .*.pl
 configuration.sh
