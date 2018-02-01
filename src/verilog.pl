@@ -321,10 +321,10 @@ mk_vcs_main(Res) :-
 	format_atom('inv(~p) :- ~n(~n~p~n;~n~p~n),~n~p.',
                     [VcsArgs, ResNewBit, ResNextStep, ResInv],
                     Res
-                   )
-        .
+                   ).
 
 mk_vcs_main_issue_new_bit(Res) :-
+        %% both executions have not finished yet
         done_var(Done), t_var(T),
         maplist(mk_lhs_name, [Done,T], [DoneL,TL]),
         maplist(mk_rhs_name, [Done,T], [DoneR,TR]),
@@ -332,19 +332,22 @@ mk_vcs_main_issue_new_bit(Res) :-
         format_atom('~p = 0, ~p = 0, ~p = 0', [DoneL, TL1, DoneL1], Line1),
         format_atom('~p = 0, ~p = 0, ~p = 0', [DoneR, TR1, DoneR1], Line2),
 
+        %% issue a new taint bit
         query_ir(taint_source, Sources),
-        maplist(mk_tagvar_name, Sources, SourceTagVars),
+        maplist(dot([mk_lhs_name, mk_tagvar_name]), Sources, SourceTagLeftVars),
+        maplist(dot([mk_rhs_name, mk_tagvar_name]), Sources, SourceTagRightVars),
+        append(SourceTagLeftVars, SourceTagRightVars, SourceTagVars),
         (   foreach(STV, SourceTagVars),
             foreach(R1, Line3),
             param(Line3)
-        do  dot([mk_primed, mk_lhs_name], STV, TVL1),
-            dot([mk_primed, mk_rhs_name], STV, TVR1),
-            format_atom('~p = 1, ~p = 1', [TVL1, TVR1], R1)
+        do  mk_primed(STV, STV1),
+            format_atom('~p = 1', [STV1], R1)
         ),
         mk_and(Line3,Line3And),
 
+        %% all variable valuations stay the same.
         mk_vcs_vars(VcsVars),
-        exclude(contains(SourceTagVars), VcsVars, RestVars),
+        exclude(contains([DoneL,DoneR,TL,TR|SourceTagVars]), VcsVars, RestVars),
         (   foreach(V, RestVars),
             foreach(V2, Line4)
         do  mk_primed(V,V1),
@@ -356,6 +359,7 @@ mk_vcs_main_issue_new_bit(Res) :-
                     [Line1,Line2,Line3And,Line4And],
                     Res).
 
+%% both not done: both executions take a step.
 mk_vcs_main_next_step(Res) :-
         get_all_vars(AllVars),
 
@@ -377,6 +381,7 @@ mk_vcs_main_next_step(Res) :-
         ),
         mk_and(CES,CondEqualities),
 
+        %% both read same instructions
         query_ir(taint_source, Sources),
         (   foreach(SAtom, Sources),
             foreach(SI, SIS),
