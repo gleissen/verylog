@@ -17,10 +17,32 @@ if [[ ! -f $FILENAME ]]; then
     exit 1
 fi
 
-IVL_CHECK=$(which ivl)
+CONF_FILE="${THIS_DIR}/configuration.sh"
+CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
 
-if [[ ! -x "$IVL_CHECK" ]]; then
-    echo "No ivl executable found in the PATH"
+if [[ -f "$CONF_FILE" ]]; then
+    source $CONF_FILE
+
+    IVL=${IVL_DIR:A}/ivl
+    IVLPP=${IVL_DIR:A}/ivlpp/ivlpp
+    
+    if [[ -z "${IVL_DIR}" || ! -x "$IVL" || ! -x "$IVLPP" ]]; then
+        echo "IVL_DIR variable in ${CONF_FILE:t} does not seem right"
+        echo "currently it's set to ${IVL_DIR:A}"
+        exit 1
+    fi
+    
+    QARMC=${HORN_SOLVE_DIR:A}/qarmc5/qarmc
+    
+    if [[ -z "${HORN_SOLVE_DIR}" || ! -x "$QARMC" ]]; then
+        echo "HORN_SOLVE_DIR variable in ${CONF_FILE:t} does not seem right"
+        echo "currently it's set to ${HORN_SOLVE_DIR:A}"
+        exit 1
+    fi
+
+else
+    echo "missing ${CONF_FILE}"
+    echo "please use the file ${CONF_SKELETON_FILE:t} as a skeleton to create that file"
     exit 1
 fi
 
@@ -30,17 +52,14 @@ else
     alias sicstus='sicstus'
 fi
 
-IVL_DIR=${IVL_CHECK:A:h}
-IVL=$IVL_DIR/ivl
-IVLPP=$IVL_DIR/ivlpp/ivlpp
-
-LOGFILE=$THIS_DIR/.log.$(date +%F-%H-%M-%S)
+LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
 
 print_IR() {
     (  echo '% vim: set ft=prolog\n:- discontiguous register/1, wire/1.' && $IVL $@ -O >(cat) =($IVLPP $FILENAME) &>$LOGFILE && sed -n --posix 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $FILENAME ) || echo 'parse_failed(true).' 
 }
 
 IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
+HSF_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
 
 print_IR $@ > $IR_FILE
 last_err=$?
@@ -57,7 +76,7 @@ if $INTERPRETER; then
         -f --noinfo --nologo \
         -l 'src/verilog.pl' \
         --goal '(main -> halt; halt(1)).' \
-        -- $IR_FILE
+        -- $IR_FILE > $HSF_FILE
     
     last_err=$?
 
@@ -71,7 +90,7 @@ if $INTERPRETER; then
 
     popd
 else
-    if make -s && $APP $IR_FILE
+    if make -s && $APP $IR_FILE > $HSF_FILE
     then
         rm -f $LOGFILE
     else
@@ -80,3 +99,12 @@ else
         exit 1 
     fi
 fi
+
+echo '################################################################################'
+echo '# TEMPORARY FILES ##############################################################'
+echo '################################################################################'
+echo "IR  file : ${IR_FILE}"
+echo "HSF file : ${HSF_FILE}"
+echo '################################################################################'
+
+$QARMC $HSF_FILE

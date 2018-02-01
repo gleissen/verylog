@@ -92,7 +92,8 @@ mk_query_naming(Res) :-
         mk_vcs_vars(Vs),
         maplist(mk_atom_name, Vs, _VsAtoms),
         (   foreach(V, _VsAtoms),
-            foreach(V1, VsAtoms)
+            foreach(V1, VsAtoms),
+            param(VsAtoms)
         do  (   atom_chars(V, ['v', '_', 'V', '_', 'v', '_'|_]) ->
                 sub_atom(V,4,_,0,V1)
             ;   V1 = V
@@ -190,19 +191,17 @@ mk_next_stmt_helper(nb_asn, [L,R], Res) :-
         !, mk_next_assign_op(L,R,Res).
 
 %% generate the TR for an if statement
-mk_next_stmt_helper(ite, [Id, Cond, Then, Else], Res) :-
+mk_next_stmt_helper(ite, [Id, _Cond, Then, Else], Res) :-
         !,
-        (   atom(Cond)
+        (   atom(_Cond), mk_var_name(_Cond,Cond)
         ;   format('non-atom condition is not yet supported in ite(~p,~p,~p,~p)', [Id, Cond, Then, Else]),
             halt(1)
         ),
-        mk_ite_cond_var(Id, CondT),
-        mk_primed(CondT,CondT1),
+        mk_ite_cond_var(Id, CondTempVar),
         mk_next_stmt(Then, ThenRes),
         mk_next_stmt(Else, ElseRes),
-        mk_var_name(Cond,CondVar),
-        format_atom('ite(~p >= 1,~p = 1, ~p = ~p)', [CondVar, CondT1, CondT1, CondT], CondUpd),
-        format_atom('~p, (~p >= 1 , (~p) ; (~p))', [CondUpd, CondT, ThenRes, ElseRes], Res).
+        format_atom('ite(~p >= 1, ~p >= 1, ~p = 0)', [CondTempVar, Cond, Cond], CondUpd),
+        format_atom('~p, ((~p >= 1) -> (~p) ; (~p))', [CondUpd, Cond, ThenRes, ElseRes], Res).
 
 mk_next_stmt_helper(Type, Args, _) :-
         format('~p(~p) is not yet implemented~n', [Type, Args]), halt(1).
@@ -419,14 +418,15 @@ mk_vcs_vars(Vs) :-
 
 mk_output_file(Res) :-
         % Res0 = '',
+        % Res1 = '',
+        % Res2 = '',
+
 	mk_query_naming(Naming),
         format_atom('~p', [Naming], Res0),
 
-        % Res1 = '',
 	mk_next(Next),
         format_atom('~p', [Next], Res1),
 
-        % Res2 = '',
 	mk_vcs(Vcs),
         format_atom('~p', [Vcs], Res2),
 
@@ -577,6 +577,9 @@ fold(P,A,[H|T],R) :-
         fold(P,A2,T,R).
 
 fold(_,_,T,_) :-
-        format('~n!!! fold for ~p is not yet implemented !!!~n', [T]).
+        format('~n!!! fold for ~p is not yet implemented !!!~n', [T]),
+        halt(1).
 
 flip(A,F,R) :- call(F,A,R).
+
+
