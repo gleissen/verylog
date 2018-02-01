@@ -21,7 +21,7 @@ next(
      assign_op(Id_instr_t, Ex_aluout_t),
      %-- Hazard detection
      ite(Cond1=1, Stall=1, Stall=0),
-     Done=0, T1=T+1,
+     Done=0,
      % DEC Stage
      (   Stall=1, assign_op(Id_instr_t, Id_instr_t1), Id_Instr1=Id_Instr
      ;   Stall=0, assign_op(If_inst_t, Id_instr_t1) , Id_Instr1=If_Instr
@@ -49,8 +49,8 @@ inv(
 	    DoneL=0, TL1=0, DoneL1=0, 
 	    DoneR=0, TR1=0, DoneR1=0, 
 	    % all variable valuations stay the same.
-	    Id_InstrL1=Id_InstrL, If_inst_tL1=1, Id_instr_tL1=0, Mem_aluout_tL1=0,
-	    Id_InstrR1=Id_InstrR, If_inst_tR1=1, Id_instr_tR1=0, Mem_aluout_tR1=0
+	  Id_InstrL1=Id_InstrL, If_inst_tL1=1, Id_instr_tL1=0,
+	  Id_InstrR1=Id_InstrR, If_inst_tR1=1, Id_instr_tR1=0
 	;   % both not done: both executions take a step.
 	  next(
 	       StallL, Cond1L, If_InstrL, Id_InstrL, If_inst_tL, Id_instr_tL, Ex_aluout_tL, DoneL, TL,
@@ -60,23 +60,17 @@ inv(
 	       StallR, Cond1R, If_InstrR, Id_InstrR, If_inst_tR, Id_instr_tR, Ex_aluout_tR, DoneR, TR,
 	       Id_InstrR1, Id_instr_tR1, Mem_aluout_tR1, DoneR1, TR1
 	      ),
-	  Cond1L=Cond1R,
+	  %% 
 	  % -- both read same instructions
-	  If_InstrL1=If_InstrR,
+	  Cond1L=Cond1R,
+	  %(If_InstrL=If_InstrR->Cond1L=Cond1R),
 	  If_inst_tL1=0,
 	  If_inst_tR1=0
-	/*
-	;  % left execution done, right takes a step steps; need only one due to symmetry.
-	  DoneL=1, TL1=TL, DoneL1=DoneL,
-	  DoneR=0,
-	  next(
-	       StallR, Cond1R, If_InstrR, Id_InstrR, If_inst_tR, Id_instr_tR, Ex_aluout_tR, DoneR, TR,
-	       Id_InstrR1, Id_instr_tR1, Mem_aluout_tR1, DoneR1, TR1
-	      )
-	*/
+/*
 	;   % both done: spin.
 	    DoneL=1, TL1=TL, DoneL1=1,
 	    DoneR=1, TR1=TR, DoneR1=1
+*/	
 	),
 	inv(
 	    Id_InstrL,  If_inst_tL, Id_instr_tL, Mem_aluout_tL, DoneL, TL,

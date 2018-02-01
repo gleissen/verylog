@@ -9,6 +9,21 @@ query_naming(
 
 assign_op(X_T, Y_T) := X_T=Y_T. %ite(X_T>=1, Y_T>=1, Y_T=<0).
 
+inv(
+    If_InstrL ,Id_InstrL, Id_rtL, EX_MemReadL, Ex_rtL, If_inst_tL, Id_instr_tL, Mem_aluout_tL, DoneL, 
+    If_InstrR, Id_InstrR, Id_rtR, EX_MemReadR, Ex_rtR, If_inst_tR, Id_instr_tR, Mem_aluout_tR, DoneR
+   ) :=
+%If_InstrL=If_InstrR,
+Id_InstrL=Id_InstrR,
+Id_instr_tL=Id_instr_tR,
+If_inst_tL=If_inst_tR,
+Id_rtL=Id_rtR,
+EX_MemReadL=EX_MemReadR,
+Ex_rtL=Ex_rtR,             
+If_inst_tL=If_inst_tR,
+Mem_aluout_tL=Mem_aluout_tR, 
+DoneL=DoneR.                   %-- not maintained
+
 /*
 inv(
     If_InstrL ,Id_InstrL, Id_rtL, EX_MemReadL, Ex_rtL, If_inst_tL, Id_instr_tL, Mem_aluout_tL, DoneL, 
@@ -46,7 +61,6 @@ next(
      %Ex stage
      Ex_rt1=Id_rt,
      EX_MemRead1=ID_MemRead,
- 
      % WB stage
      assign_op(Ex_aluout_t, Mem_aluout_t1),
      ite(Mem_aluout_t1>=1, Done1=1, Done1=Done)
@@ -66,6 +80,7 @@ inv(
 	Id_rtL=Id_rtR,
 	Ex_rtL=Ex_rtR,
 	EX_MemReadL=EX_MemReadR.
+
 
 inv(
     If_InstrL1, Id_InstrL1, Id_rtL1, EX_MemReadL1, Ex_rtL1, If_inst_tL1, Id_instr_tL1, Mem_aluout_tL1, DoneL1, 
@@ -103,11 +118,6 @@ inv(
 	  % -- new instruction doesn't have a tag
 	  If_inst_tL1=0,
 	  If_inst_tR1=0
-	/*
-	;   % both done: spin.
-	    DoneL=1, DoneL1=1,
-	    DoneR=1, DoneR1=1
-	*/
 	),
 	inv(
 	    If_InstrL, Id_InstrL, Id_rtL, EX_MemReadL, Ex_rtL, If_inst_tL, Id_instr_tL, Mem_aluout_tL, DoneL, 
