@@ -13,9 +13,9 @@
 :- use_module(library(lists)).
 :- use_module(library(file_systems)).
 
-:- dynamic cond_vars/1.
+:- dynamic cond_atoms/1.
 
-:- retractall(cond_vars(_)).
+:- retractall(cond_atoms(_)).
 
 /*
 ==========================================
@@ -63,7 +63,7 @@ run_initial_toplevels(TL,P,_) :-
 run_initial_stmt(ite,[Id,_,Then,Else], _) :-
         !,
         mk_ite_cond_atom(Id,CondAtom),
-        assert(cond_vars(CondAtom)),
+        assert(cond_atoms(CondAtom)),
         ( \+ atom(Then)
         ; Then =.. [TypeThen|ArgThen], run_initial_stmt(TypeThen, ArgThen,_)
         ),
@@ -243,6 +243,9 @@ mk_next_sep(P,Res) :-
 
 mk_next_vars(Vs) :-
         get_all_vars(Vars),
+        mk_next_vars(Vars,Vs).
+
+mk_next_vars(Vars,Vs) :-
         maplist(mk_primed, Vars, Vars1),
         append(Vars,Vars1,Vs).
         
@@ -322,11 +325,77 @@ mk_vcs_main(Res) :-
         .
 
 mk_vcs_main_issue_new_bit(Res) :-
-                                % TODO 
-        Res = 'true'.
+        done_var(Done), t_var(T),
+        maplist(mk_lhs_name, [Done,T], [DoneL,TL]),
+        maplist(mk_rhs_name, [Done,T], [DoneR,TR]),
+        maplist(mk_primed,   [DoneL,DoneR,TL,TR], [DoneL1,DoneR1,TL1,TR1]),
+        format_atom('~p = 0, ~p = 0, ~p = 0', [DoneL, TL1, DoneL1], Line1),
+        format_atom('~p = 0, ~p = 0, ~p = 0', [DoneR, TR1, DoneR1], Line2),
+
+        query_ir(taint_source, Sources),
+        maplist(mk_tagvar_name, Sources, SourceTagVars),
+        (   foreach(STV, SourceTagVars),
+            foreach(R1, Line3),
+            param(Line3)
+        do  dot([mk_primed, mk_lhs_name], STV, TVL1),
+            dot([mk_primed, mk_rhs_name], STV, TVR1),
+            format_atom('~p = 1, ~p = 1', [TVL1, TVR1], R1)
+        ),
+        mk_and(Line3,Line3And),
+
+        mk_vcs_vars(VcsVars),
+        exclude(contains(SourceTagVars), VcsVars, RestVars),
+        (   foreach(V, RestVars),
+            foreach(V2, Line4)
+        do  mk_primed(V,V1),
+            format_atom('~p = ~p', [V1, V], V2)
+        ),
+        mk_and(Line4,Line4And),
+        
+        format_atom('~p,~n~p,~n~p,~n~p',
+                    [Line1,Line2,Line3And,Line4And],
+                    Res).
 
 mk_vcs_main_next_step(Res) :-
-        Res = 'true'.
+        get_all_vars(AllVars),
+
+        maplist(mk_lhs_name, AllVars, LeftVars),
+        mk_next_vars(LeftVars,NextVarsLeft),
+        mk_and(NextVarsLeft, NextVarsLeftAnd),
+
+        maplist(mk_rhs_name, AllVars, RightVars),
+        mk_next_vars(RightVars,NextVarsRight),
+        mk_and(NextVarsRight, NextVarsRightAnd),
+
+        setof(X, cond_atoms(X), CondAtoms),
+        (   foreach(CA, CondAtoms),
+            foreach(CE, CES),
+            param(CES)
+        do  mk_var_name(CA,CV),
+            maplist(flip(CV), [mk_lhs_name, mk_rhs_name], [CVL, CVR]),
+            format_atom('~p = ~p', [CVL,CVR], CE)
+        ),
+        mk_and(CES,CondEqualities),
+
+        query_ir(taint_source, Sources),
+        (   foreach(SAtom, Sources),
+            foreach(SI, SIS),
+            param(SIS)
+        do  mk_var_name(SAtom, SVar),
+            maplist(dot([mk_primed, flip(SVar)]),
+                    [mk_lhs_name, mk_rhs_name],
+                    [SVarL1, SVarR1]),
+            mk_tag_name(SVar, STVar),
+            maplist(dot([mk_primed, flip(STVar)]),
+                    [mk_lhs_name, mk_rhs_name],
+                    [STVarL1, STVarR1]),
+            format_atom('~p = ~p, ~p = 0, ~p = 0', [SVarL1, SVarR1, STVarL1, STVarR1], SI)
+        ),
+        mk_and(SIS, SameInstructions),
+
+        format_atom('next(~p),~nnext(~p),~n~p,~n~p',
+                    [NextVarsLeftAnd, NextVarsRightAnd, CondEqualities, SameInstructions],
+                    Res).
 
 mk_vcs_main_given_inv(Res) :-
         mk_vcs_vars(VcsVars),
@@ -484,7 +553,7 @@ get_tag_vars(VsTagVars) :-
         maplist(mk_tagvar_name,VsRegs,VsTagVars).
 
 get_other_vars(OtherVars) :-
-        setof(X, cond_vars(X), _Rest),
+        setof(X, cond_atoms(X), _Rest),
         maplist(mk_var_name,_Rest,Rest),
         done_var(Done),
         t_var(T),
@@ -504,3 +573,5 @@ fold(P,A,[H|T],R) :-
 
 fold(_,_,T,_) :-
         format('~n!!! fold for ~p is not yet implemented !!!~n', [T]).
+
+flip(A,F,R) :- call(F,A,R).
