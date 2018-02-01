@@ -201,7 +201,7 @@ mk_next_stmt_helper(ite, [Id, Cond, Then, Else], Res) :-
         mk_next_stmt(Then, ThenRes),
         mk_next_stmt(Else, ElseRes),
         mk_var_name(Cond,CondVar),
-        format_atom('ite(~p >= 1,~p = 1, ~p = 0)', [CondVar, CondT1, CondT1], CondUpd),
+        format_atom('ite(~p >= 1,~p = 1, ~p = ~p)', [CondVar, CondT1, CondT1, CondT], CondUpd),
         format_atom('~p, (~p >= 1 , (~p) ; (~p))', [CondUpd, CondT, ThenRes, ElseRes], Res).
 
 mk_next_stmt_helper(Type, Args, _) :-
@@ -307,11 +307,31 @@ mk_vcs_init(Res) :-
 	format_atom('inv(~p) :- ~p.', [VsArgs, VsBody], Res).
 
 mk_vcs_main(Res) :-
-	mk_vcs_vars(VcsVars),
-	mk_and(VcsVars,VsArgs),
+	mk_vcs_vars(_VcsVars),
+        maplist(mk_primed,_VcsVars,VcsVars),
+	mk_and(VcsVars,VcsArgs),
 
-	format_atom('inv(~p) :- true.', [VsArgs], Res).
+        mk_vcs_main_issue_new_bit(ResNewBit),
+        mk_vcs_main_next_step(ResNextStep),
+        mk_vcs_main_given_inv(ResInv),
 
+	format_atom('inv(~p) :- ~n(~n~p~n;~n~p~n),~n~p.',
+                    [VcsArgs, ResNewBit, ResNextStep, ResInv],
+                    Res
+                   )
+        .
+
+mk_vcs_main_issue_new_bit(Res) :-
+                                % TODO 
+        Res = 'true'.
+
+mk_vcs_main_next_step(Res) :-
+        Res = 'true'.
+
+mk_vcs_main_given_inv(Res) :-
+        mk_vcs_vars(VcsVars),
+        mk_and(VcsVars,VcsArgs),
+        format_atom('inv(~p)', [VcsArgs], Res).
 
 mk_vcs_vars(Vs) :-
         get_all_vars(AllVars),
