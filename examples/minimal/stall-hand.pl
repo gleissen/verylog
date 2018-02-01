@@ -76,9 +76,9 @@ inv(
 	       Id_InstrR1, Id_instr_tR1, Mem_aluout_tR1, DoneR1, TR1
 	      )
 	*/
-	;   % both done: spin.
-	    DoneL=1, TL1=TL, DoneL1=1,
-	    DoneR=1, TR1=TR, DoneR1=1
+	% ;   % both done: spin.
+	%     DoneL=1, TL1=TL, DoneL1=1,
+	%     DoneR=1, TR1=TR, DoneR1=1
 	),
 	inv(
 	    Id_InstrL,  If_inst_tL, Id_instr_tL, Mem_aluout_tL, DoneL, TL,

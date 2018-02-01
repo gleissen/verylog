@@ -7,7 +7,7 @@ module stalling_cpu(clk);
    // Definitions
    //=============
 
-   reg [1:0] Stall;
+   reg [1:0]  Stall;
    reg [31:0] IF_instr;
    reg [31:0] ID_instr;
    reg [1:0]  EX_ALUOp;
@@ -35,14 +35,14 @@ module stalling_cpu(clk);
    //=============
    
    // no definition for this; treat as wire.
-   alu EX_ALU(ID_instr, EX_ALUOut);
+   alu EX_ALU(ID_instr, EX_ALUOp);
 
    //=============
    // EXEC stage
    //=============
 
    always @(posedge clk)	
-     MEM_ALUOut <= EX_ALUOut;
+     MEM_ALUOut <= EX_ALUOp;
 
    //=============
    // MEM stage
@@ -63,9 +63,17 @@ endmodule
 module decide_stall(i, o);
    input i;
    output o;
+   reg    i;
+   reg    o;
+   
+   assign o = i;
 endmodule
 
 module alu(i, o);
    input i;
    output o;
+   reg    i;
+   reg    o;
+
+   assign o = i;
 endmodule

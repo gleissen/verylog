@@ -13,9 +13,15 @@
 :- use_module(library(lists)).
 :- use_module(library(file_systems)).
 
-:- dynamic cond_atoms/1.
+:- dynamic
+        cond_atoms/1,
+        ite/4
+        .
 
-:- retractall(cond_atoms(_)).
+:-
+        retractall(cond_atoms(_)),
+        retractall(ite(_,_,_,_)).
+        
 
 /*
 ==========================================
@@ -60,10 +66,9 @@ run_initial_toplevels(TL,P,_) :-
         format('run_initial_toplevels is not yet implemented for ~p as in ~p~n', [TL,P]),
         halt(1).
 
-run_initial_stmt(ite,[Id,_,Then,Else], _) :-
+run_initial_stmt(ite,[Id,Cond,Then,Else], _) :-
         !,
-        mk_ite_cond_atom(Id,CondAtom),
-        assert(cond_atoms(CondAtom)),
+        assert(ite(Id,Cond,Then,Else)),
         ( \+ atom(Then)
         ; Then =.. [TypeThen|ArgThen], run_initial_stmt(TypeThen, ArgThen,_)
         ),
@@ -160,8 +165,8 @@ mk_next_sink_cond(Res) :-
 
 %% generates the line for 'Done = 0, T1 = T + 1'
 mk_next_incr(Res) :-
-        done_var(Done), t_var(T), mk_primed(T,T1),
-        format_atom('~p = 0, ~p = ~p + 1', [Done, T1, T], Res).
+        done_var(Done),
+        format_atom('~p = 0', [Done], Res).
 
 %% generate the TR for the statements inside the always blocks
 mk_next_always(Res) :-
@@ -193,15 +198,14 @@ mk_next_stmt_helper(nb_asn, [L,R], Res) :-
 %% generate the TR for an if statement
 mk_next_stmt_helper(ite, [Id, _Cond, Then, Else], Res) :-
         !,
-        (   atom(_Cond), mk_var_name(_Cond,Cond)
-        ;   format('non-atom condition is not yet supported in ite(~p,~p,~p,~p)', [Id, Cond, Then, Else]),
+        (   atom(_Cond) -> mk_var_name(_Cond,Cond)
+        ;   format('non-atom condition is not yet supported in ite(~p,~p,~p,~p)', [Id, _Cond, Then, Else]),
             halt(1)
         ),
-        mk_ite_cond_var(Id, CondTempVar),
+        % mk_ite_cond_var(Id, CondTempVar),
         mk_next_stmt(Then, ThenRes),
         mk_next_stmt(Else, ElseRes),
-        format_atom('ite(~p >= 1, ~p >= 1, ~p = 0)', [CondTempVar, Cond, Cond], CondUpd),
-        format_atom('~p, ((~p >= 1) -> (~p) ; (~p))', [CondUpd, Cond, ThenRes, ElseRes], Res).
+        format_atom('((~p >= 1), (~p) ; (~p =< 0), (~p))', [Cond, ThenRes, Cond, ElseRes], Res).
 
 mk_next_stmt_helper(Type, Args, _) :-
         format('~p(~p) is not yet implemented~n', [Type, Args]), halt(1).
@@ -324,12 +328,11 @@ mk_vcs_main(Res) :-
 
 mk_vcs_main_issue_new_bit(Res) :-
         %% both executions have not finished yet
-        done_var(Done), t_var(T),
-        maplist(mk_lhs_name, [Done,T], [DoneL,TL]),
-        maplist(mk_rhs_name, [Done,T], [DoneR,TR]),
-        maplist(mk_primed,   [DoneL,DoneR,TL,TR], [DoneL1,DoneR1,TL1,TR1]),
-        format_atom('~p = 0, ~p = 0, ~p = 0', [DoneL, TL1, DoneL1], Line1),
-        format_atom('~p = 0, ~p = 0, ~p = 0', [DoneR, TR1, DoneR1], Line2),
+        done_var(Done),
+        maplist(flip(Done), [mk_lhs_name,mk_rhs_name], [DoneL, DoneR]),
+        maplist(mk_primed,   [DoneL,DoneR], [DoneL1,DoneR1]),
+        format_atom('~p = 0, ~p = 0', [DoneL, DoneL1], Line1),
+        format_atom('~p = 0, ~p = 0', [DoneR, DoneR1], Line2),
 
         %% issue a new taint bit
         query_ir(taint_source, Sources),
@@ -346,7 +349,7 @@ mk_vcs_main_issue_new_bit(Res) :-
 
         %% all variable valuations stay the same.
         mk_vcs_vars(VcsVars),
-        exclude(contains([DoneL,DoneR,TL,TR|SourceTagVars]), VcsVars, RestVars),
+        exclude(contains([DoneL,DoneR|SourceTagVars]), VcsVars, RestVars),
         (   foreach(V, RestVars),
             foreach(V2, Line4)
         do  mk_primed(V,V1),
@@ -370,12 +373,14 @@ mk_vcs_main_next_step(Res) :-
         mk_next_vars(RightVars,NextVarsRight),
         mk_and(NextVarsRight, NextVarsRightAnd),
 
-        setof(X, cond_atoms(X), CondAtoms),
-        (   foreach(CA, CondAtoms),
+        %% TODO: fix this hack
+        %% get_cond_vars(CondVars),
+        findall(C, ite(_Id,C,_Then,_Else), CondAtoms),
+        maplist(mk_var_name,CondAtoms,CondVars),
+        (   foreach(CV, CondVars),
             foreach(CE, CES),
             param(CES)
-        do  mk_var_name(CA,CV),
-            maplist(flip(CV), [mk_lhs_name, mk_rhs_name], [CVL, CVR]),
+        do  maplist(flip(CV), [mk_lhs_name, mk_rhs_name], [CVL, CVR]),
             format_atom('~p = ~p', [CVL,CVR], CE)
         ),
         mk_and(CES,CondEqualities),
@@ -428,6 +433,7 @@ mk_output_file(Res) :-
         % Res0 = '',
         % Res1 = '',
         % Res2 = '',
+        % Res3 = '',
 
 	mk_query_naming(Naming),
         format_atom('~p', [Naming], Res0),
@@ -483,9 +489,6 @@ ir_toplevel_list([
 
 done_var('Done').
 done_atom('done').
-
-t_var('T').
-t_atom('t').
 
 query_ir(P, Ls) :-
         ( findall(F, current_predicate(P,F), [_,_|_]) ->
@@ -567,12 +570,14 @@ get_tag_vars(VsTagVars) :-
         query_ir(register,VsRegs),
         maplist(mk_tagvar_name,VsRegs,VsTagVars).
 
-get_other_vars(OtherVars) :-
-        setof(X, cond_atoms(X), _Rest),
-        maplist(mk_var_name,_Rest,Rest),
+get_cond_vars(Conds) :-
+        findall(X, cond_atoms(X), _CondAtoms),
+        remove_dups(_CondAtoms,CondAtoms),
+        maplist(mk_var_name,CondAtoms,Conds).
+
+get_other_vars([Done|Conds]) :-
         done_var(Done),
-        t_var(T),
-        append(Rest,[Done,T],OtherVars).
+        get_cond_vars(Conds).
 
 get_all_vars(VsAllVars) :-
         get_reg_vars(VsRegVars),
