@@ -412,6 +412,14 @@ mk_vcs_vars(Vs) :-
         maplist(mk_rhs_name, AllVars, RightVars),
         append(LeftVars,RightVars,Vs).
 
+mk_property(Res) :-
+        done_var(Done),
+        maplist(flip(Done), [mk_lhs_name, mk_rhs_name], [DoneL, DoneR]),
+        mk_vcs_vars(Vs),
+        mk_and(Vs,VsAnd),
+        format_atom('~p = 1 :-~ninv(~p), ~p = 1.', [DoneR,VsAnd, DoneL], Res).
+        
+
 %% #############################################################################
 %% ### RUNNING #################################################################
 %% #############################################################################
@@ -430,7 +438,9 @@ mk_output_file(Res) :-
 	mk_vcs(Vcs),
         format_atom('~p', [Vcs], Res2),
 
-        format_atom('~n~n~p~n~n~p~n~n~p', [Res0, Res1, Res2], Res),
+        mk_property(Res3),
+
+        format_atom('~n~n~p~n~n~p~n~n~p~n~n~p', [Res0, Res1, Res2, Res3], Res),
         true.
 	
 main :-

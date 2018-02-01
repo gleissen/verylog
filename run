@@ -55,7 +55,7 @@ fi
 LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
 
 print_IR() {
-    (  echo '% vim: set ft=prolog\n:- discontiguous register/1, wire/1.' && $IVL $@ -O >(cat) =($IVLPP $FILENAME) &>$LOGFILE && sed -n --posix 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $FILENAME ) || echo 'parse_failed(true).' 
+    (  echo '% vim: set ft=prolog\n:- discontiguous register/1, wire/1.' && $IVL $@ -O >(cat) =($IVLPP $FILENAME) &>$LOGFILE && sed -n 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $FILENAME ) || echo 'parse_failed(true).' 
 }
 
 IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
