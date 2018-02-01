@@ -13,6 +13,10 @@
 :- use_module(library(lists)).
 :- use_module(library(file_systems)).
 
+:- dynamic cond_vars/1.
+
+:- retractall(cond_vars(_)).
+
 /*
 ==========================================
 Clauses used in the intermediate language:
@@ -29,6 +33,54 @@ nb_asn(Lhs,Rhs)
 /*
 Creates Horn clause verification conditions from a intermediate language verilog file.
 */
+%% #############################################################################
+%% ### INITIAL PASS OVER THE PROGRAM ###########################################
+%% #############################################################################
+
+
+run_initial_pass :-
+        ir_toplevel_list(TopLevelPredicates),
+        (   foreach(P, TopLevelPredicates)
+        do  query_ir(P, PInsts),
+            maplist(run_initial_toplevels(P), PInsts, _)
+        ).
+
+run_initial_toplevels(always, _Event-Stmt, _) :-
+        !, Stmt =.. [Type|Args],
+        run_initial_stmt(Type, Args, _).
+
+run_initial_toplevels(module_inst, _Name-_Inputs-_Outputs, _) :- !.
+
+run_initial_toplevels(register,_,_) :- !.
+run_initial_toplevels(wire,_,_) :- !.
+run_initial_toplevels(taint_source,_,_) :- !.
+run_initial_toplevels(taint_sink,_,_) :- !.
+
+run_initial_toplevels(TL,P,_) :-
+        format('run_initial_toplevels is not yet implemented for ~p as in ~p~n', [TL,P]),
+        halt(1).
+
+run_initial_stmt(ite,[Id,_,Then,Else], _) :-
+        !,
+        mk_ite_cond_atom(Id,CondAtom),
+        assert(cond_vars(CondAtom)),
+        ( \+ atom(Then)
+        ; Then =.. [TypeThen|ArgThen], run_initial_stmt(TypeThen, ArgThen,_)
+        ),
+        ( \+ atom(Else)
+        ; Else =.. [TypeElse|ArgElse], run_initial_stmt(TypeElse, ArgElse,_)
+        ).
+
+run_initial_stmt(nb_asn,[_Lhs,_Rhs], _) :- !.
+
+run_initial_stmt(Type,Args,_) :-
+        ir_stmt(Stmts),
+        (   memberchk(Type, Stmts), 
+            format('skipping run_initial_stmt for ~p(~p)~n', [Type,Args])
+        ;   format('invalid: run_initial_stmt for ~p(~p)~n', [Type,Args]),
+            halt(1)
+        ).
+        
 
 %% #############################################################################
 %% ### INITIAL STATES AND PROPERTY #############################################
@@ -39,10 +91,11 @@ Creates Horn clause verification conditions from a intermediate language verilog
 mk_query_naming(Res) :-
         mk_vcs_vars(Vs),
         maplist(mk_atom_name, Vs, _VsAtoms),
-        (   foreach(V,_VsAtoms),
-            foreach(V1,VsAtoms)
-        do  ( atom_chars(V, ['v', '_', 'V', '_', 'v', '_'|_]) -> sub_atom(V,4,_,0,V1)
-            ; V1 = V
+        (   foreach(V, _VsAtoms),
+            foreach(V1, VsAtoms)
+        do  (   atom_chars(V, ['v', '_', 'V', '_', 'v', '_'|_]) ->
+                sub_atom(V,4,_,0,V1)
+            ;   V1 = V
             )
         ),
         mk_and(VsAtoms,And),
@@ -137,23 +190,22 @@ mk_next_stmt_helper(nb_asn, [L,R], Res) :-
         !, mk_next_assign_op(L,R,Res).
 
 %% generate the TR for an if statement
-mk_next_stmt_helper(ite, [Cond, Then, Else], Res) :-
-        !, mk_next_ite_cond(Cond,CondT,CondF),
+mk_next_stmt_helper(ite, [Id, Cond, Then, Else], Res) :-
+        !,
+        (   atom(Cond)
+        ;   format('non-atom condition is not yet supported in ite(~p,~p,~p,~p)', [Id, Cond, Then, Else]),
+            halt(1)
+        ),
+        mk_ite_cond_var(Id, CondT),
+        mk_primed(CondT,CondT1),
         mk_next_stmt(Then, ThenRes),
         mk_next_stmt(Else, ElseRes),
-        format_atom('((~p) -> (~p) ; (~p) -> (~p))', [CondT, ThenRes, CondF, ElseRes], Res).
+        mk_var_name(Cond,CondVar),
+        format_atom('ite(~p >= 1,~p = 1, ~p = 0)', [CondVar, CondT1, CondT1], CondUpd),
+        format_atom('~p, (~p >= 1 , (~p) ; (~p))', [CondUpd, CondT, ThenRes, ElseRes], Res).
 
-mk_next_stmt_helper(Type, _, _) :-
-        format('~p is not yet implemented~n', [Type]), halt(1).
-
-mk_next_ite_cond(Cond, ResT, ResF) :-
-        (   \+ atom(Cond) ->
-            format('only atomic if conditions are supported (i.e. not ~p))', [Cond]),
-            halt(1)
-        ;   mk_var_name(Cond,CondV),
-            format_atom('~p >= 1', [CondV], ResT),
-            format_atom('~p  = 0', [CondV], ResF)
-        ).
+mk_next_stmt_helper(Type, Args, _) :-
+        format('~p(~p) is not yet implemented~n', [Type, Args]), halt(1).
 
 %% generate the TR for a module instantiation
 mk_next_module_inst(Res) :-
@@ -184,7 +236,7 @@ mk_next_assign_op(L,R,Res) :-
         format_atom('assign_op(~p, ~p, ~p, ~p)', [LT1, RT, LV1, RV], Res).
 
 mk_next_helper_assign_op(Res) :-
-        format_atom('assign_op(LT1, RT, LV1, RV) :- !, LT1 = RT, LV1 = RV.', [], Res).
+        format_atom('assign_op(LT1, RT, LV1, RV) :- LT1 = RT, LV1 = RV.', [], Res).
         
 mk_next_sep(P,Res) :-
         format_atom('~n  ~p', [P], Res).
@@ -210,34 +262,34 @@ mk_vcs_init(Res) :-
 
         query_ir(taint_source, Sources),
         maplist(mk_tagvar_name, Sources, SourceTagVars),
-        (   foreach(TV, SourceTagVars),
-            foreach(R, TVRes1),
+        (   foreach(TV1, SourceTagVars),
+            foreach(R1, TVRes1),
             param(TVRes1)
-        do  mk_lhs_name(TV, TVL),
-            mk_rhs_name(TV, TVR),
-            format_atom('~p = 1, ~p = 1', [TVL, TVR], _R),
-            mk_next_sep(_R,R)
+        do  mk_lhs_name(TV1, TVL1),
+            mk_rhs_name(TV1, TVR1),
+            format_atom('~p = 1, ~p = 1', [TVL1, TVR1], _R1),
+            mk_next_sep(_R1,R1)
         ),
 
         get_tag_vars(TagVars),
         exclude(contains(SourceTagVars), TagVars, RestVars),
-        (   foreach(TV, RestVars),
-            foreach(R,  TVRes2),
+        (   foreach(TV2, RestVars),
+            foreach(R2,  TVRes2),
             param(TVRes2)
-        do  mk_lhs_name(TV, TVL),
-            mk_rhs_name(TV, TVR),
-            format_atom('~p = 0, ~p = 0', [TVL, TVR], _R),
-            mk_next_sep(_R,R)
+        do  mk_lhs_name(TV2, TVL2),
+            mk_rhs_name(TV2, TVR2),
+            format_atom('~p = 0, ~p = 0', [TVL2, TVR2], _R2),
+            mk_next_sep(_R2,R2)
         ),
 
         get_other_vars(OtherVars),
-        (   foreach(TV, OtherVars),
-            foreach(R,  TVRes3),
+        (   foreach(TV3, OtherVars),
+            foreach(R3,  TVRes3),
             param(TVRes3)
-        do  mk_lhs_name(TV, TVL),
-            mk_rhs_name(TV, TVR),
-            format_atom('~p = 0, ~p = 0', [TVL, TVR], _R),
-            mk_next_sep(_R,R)
+        do  mk_lhs_name(TV3, TVL3),
+            mk_rhs_name(TV3, TVR3),
+            format_atom('~p = 0, ~p = 0', [TVL3, TVR3], _R3),
+            mk_next_sep(_R3,R3)
         ),
 
         (   foreach(S, Sources),
@@ -294,6 +346,7 @@ main :-
 runInput(Input) :-
         % print_file(Input),
         my_consult(Input),
+        run_initial_pass,
 	mk_output_file(Res),
 	format('~p',[Res]).
         
@@ -319,10 +372,10 @@ ir_stmt([
          ite
         ]).
 
-ir_list([
-         register, wire, module_inst, always,
-         taint_source, taint_sink
-        ]).
+ir_toplevel_list([
+                  register, wire, module_inst, always,
+                  taint_source, taint_sink
+                 ]).
 
 done_var('Done').
 done_atom('done').
@@ -333,7 +386,7 @@ t_atom('t').
 query_ir(P, Ls) :-
         ( findall(F, current_predicate(P,F), [_,_|_]) ->
             format('~p has multiple arities !', [P]), halt(1)
-        ; ir_list(IR), \+ memberchk(P, IR) ->
+        ; ir_toplevel_list(IR), \+ memberchk(P, IR) ->
             format('~p does not belong to the IR !', [P]), halt(1)
         ; true
         ),                      % sanity check
@@ -379,6 +432,12 @@ mk_primed(X,X1) :-
 mk_nl(X,X1) :-
         format_atom('~p~n', [X], X1).
 
+mk_ite_cond_atom(Id, Cond) :-
+        format_atom('cond_~p_', [Id], Cond).
+
+mk_ite_cond_var(Id, Cond) :-
+        dot([mk_var_name, mk_ite_cond_atom], Id, Cond).
+
 mk_ite(Cond,Then,Else,Res) :-
         format_atom('ite(~p, ~p, ~p)', [Cond, Then, Else], Res).
 
@@ -404,12 +463,24 @@ get_tag_vars(VsTagVars) :-
         query_ir(register,VsRegs),
         maplist(mk_tagvar_name,VsRegs,VsTagVars).
 
-get_other_vars([Done, T]) :-
+get_other_vars(OtherVars) :-
+        setof(X, cond_vars(X), _Rest),
+        maplist(mk_var_name,_Rest,Rest),
         done_var(Done),
-        t_var(T).
+        t_var(T),
+        append(Rest,[Done,T],OtherVars).
 
 get_all_vars(VsAllVars) :-
         get_reg_vars(VsRegVars),
         get_tag_vars(VsTagVars),
         get_other_vars(VsOtherVars),
         flatten([VsRegVars,VsTagVars,VsOtherVars], VsAllVars).
+
+fold(_,A,[],A) :- !.
+fold(P,A,[H|T],R) :-
+        !,
+        call(P,A,H,A2),
+        fold(P,A2,T,R).
+
+fold(_,_,T,_) :-
+        format('~n!!! fold for ~p is not yet implemented !!!~n', [T]).
