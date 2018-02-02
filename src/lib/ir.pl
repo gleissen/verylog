@@ -18,7 +18,6 @@
               ], [hidden(true)]).
 
 :- use_module(library(lists)).
-
 :- use_module('misc.pl').
 
 /*
@@ -37,14 +36,25 @@ nb_asn(Lhs,Rhs)  // L <= R
 link(OutputName, InputVars)
 */
 
+:- multifile register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1.
+:- dynamic   register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1.
 
-:- dynamic
-        cond_atoms/1,
-        ite/4.
+:- dynamic cond_atoms/1, ite/4.
 
 wipe_db :-
+        retractall(register(_)),
+        retractall(wire(_)),
+        retractall(module_inst(_,_,_)),
+        retractall(always(_,_)),
+        retractall(link(_,_)),
+        retractall(asn(_,_)),
+        retractall(taint_sink(_)),
+        retractall(taint_source(_)),
+
         retractall(cond_atoms(_)),
-        retractall(ite(_,_,_,_)).
+        retractall(ite(_,_,_,_)),
+
+        true.
 
 :- wipe_db.
 

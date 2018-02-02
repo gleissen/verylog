@@ -1,4 +1,9 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
+
+if [[ "$(uname)" != "Darwin" &&  "$(expr substr $(uname -s) 1 5)" != "Linux"  ]]; then
+    echo "${0:t} is not supported in your platform" 1>&2
+    exit 1
+fi
 
 THIS_DIR=${0:A:h}
 APP=$THIS_DIR/vcgen
@@ -84,8 +89,16 @@ fi
 
 # output of this function is redirected to the IR_FILE
 print_IR() {
-    echo '% vim: set ft=prolog\n:- discontiguous register/1, wire/1, asn/2, module_inst/3.' && \
-        $IVLPP $FILENAME 1>$PREPROCESSED_FILE && \
+    predicates='register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1'
+    cat <<EOF
+% vim: set ft=prolog
+:- multifile $predicates.
+:- dynamic $predicates.
+:- discontiguous register/1, wire/1, asn/2, module_inst/3.
+
+EOF
+
+    $IVLPP $FILENAME 1>$PREPROCESSED_FILE && \
         $IVL $@ -O >(cat) $PREPROCESSED_FILE &>$LOGFILE && \
         sed -n 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $FILENAME  
     
@@ -141,7 +154,14 @@ if [[ -n "$JUST_VCGEN" ]]; then
     exit 0
 fi
 
-$QARMC $HSF_FILE
+if [[ "$(uname)" == "Darwin" ]]; then
+    $QARMC $HSF_FILE
+else
+    $QARMC $HSF_FILE | \
+        awk '{ print $0; } /program is correct/ {correct = 1;} END {if(correct) {exit 0;} else {exit 1;}}'
+fi
+
+last_err=$?
 
 echo
 echo '################################################################################'
@@ -150,5 +170,7 @@ echo '##########################################################################
 echo "IR  file : ${IR_FILE}"
 echo "HSF file : ${HSF_FILE}"
 echo '################################################################################'
+
+exit $last_err
 
 
