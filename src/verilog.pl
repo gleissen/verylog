@@ -6,7 +6,9 @@
 			      mk_and/3,
                               mk_sum/2,
                               contains/2,
-                              flatten/2
+                              flatten/2,
+                              throwerr/2,
+                              warn/2
                               ]).
 
 :- use_module('lib/utils.pl').
@@ -57,14 +59,16 @@ run_initial_toplevels(always, _Event-Stmt, _) :-
 
 run_initial_toplevels(module_inst, _Name-_Inputs-_Outputs, _) :- !.
 
+run_initial_toplevels(link,_UFOut-_UFIns,_) :- !.
+run_initial_toplevels(asn,_Lhs-_Rhs,_) :- !.
+
 run_initial_toplevels(register,_,_) :- !.
 run_initial_toplevels(wire,_,_) :- !.
 run_initial_toplevels(taint_source,_,_) :- !.
 run_initial_toplevels(taint_sink,_,_) :- !.
 
 run_initial_toplevels(TL,P,_) :-
-        format('run_initial_toplevels is not yet implemented for ~p as in ~p~n', [TL,P]),
-        halt(1).
+        throwerr('run_initial_toplevels is not yet implemented for ~p as in ~p~n', [TL,P]).
 
 run_initial_stmt(ite,[Id,Cond,Then,Else], _) :-
         !,
@@ -78,12 +82,17 @@ run_initial_stmt(ite,[Id,Cond,Then,Else], _) :-
 
 run_initial_stmt(nb_asn,[_Lhs,_Rhs], _) :- !.
 
+run_initial_stmt(block,[Stmts], _) :- !,
+        (   foreach(Stmt, Stmts)
+        do  Stmt =.. [Type|Args],
+            run_initial_stmt(Type,Args,_)
+        ).
+
 run_initial_stmt(Type,Args,_) :-
         ir_stmt(Stmts),
         (   memberchk(Type, Stmts), 
-            format('skipping run_initial_stmt for ~p(~p)~n', [Type,Args])
-        ;   format('invalid: run_initial_stmt for ~p(~p)~n', [Type,Args]),
-            halt(1)
+            throwerr('missing run_initial_stmt for ~p(~p)~n', [Type,Args])
+        ;   throwerr('invalid: run_initial_stmt for ~p(~p)~n', [Type,Args])
         ).
         
 
@@ -160,7 +169,7 @@ mk_next_sink_cond(Res) :-
             mk_tagvar_name(_Sink, Sink), mk_primed(Sink,Sink1),
             done_var(Done), mk_primed(Done,Done1),
             format_atom('ite(~p >= 1, ~p = 1, ~p = ~p)',[Sink1, Done1, Done1, Done], Res)
-        ; print('no taink_sink predicate !'), halt(1)
+        ; throwerr('no taink_sink predicate !', [])
         ).
 
 %% generates the line for 'Done = 0, T1 = T + 1'
@@ -184,11 +193,10 @@ mk_next_always(Res) :-
 mk_next_stmt(Stmt,Res) :-
         (   Stmt =.. [Type|Args] ->
             ( ir_stmt(L), memberchk(Type, L) -> true
-            ; format('~p is not a valid statement !~n', [Type]), halt(1)
+            ; throwerr('~p is not a valid statement !~n', [Type])
             ),
             mk_next_stmt_helper(Type,Args,Res)
-        ;   format('~p is not a valid statement !', [Stmt]),
-            halt(1)
+        ;   throwerr('~p is not a valid statement !', [Stmt])
         ).
 
 %% generate the TR for process a non-blocking assignment
@@ -199,8 +207,7 @@ mk_next_stmt_helper(nb_asn, [L,R], Res) :-
 mk_next_stmt_helper(ite, [Id, _Cond, Then, Else], Res) :-
         !,
         (   atom(_Cond) -> mk_var_name(_Cond,Cond)
-        ;   format('non-atom condition is not yet supported in ite(~p,~p,~p,~p)', [Id, _Cond, Then, Else]),
-            halt(1)
+        ;   throwerr('non-atom condition is not yet supported in ite(~p,~p,~p,~p)', [Id, _Cond, Then, Else])
         ),
         % mk_ite_cond_var(Id, CondTempVar),
         mk_next_stmt(Then, ThenRes),
@@ -208,7 +215,7 @@ mk_next_stmt_helper(ite, [Id, _Cond, Then, Else], Res) :-
         format_atom('((~p >= 1), (~p) ; (~p =< 0), (~p))', [Cond, ThenRes, Cond, ElseRes], Res).
 
 mk_next_stmt_helper(Type, Args, _) :-
-        format('~p(~p) is not yet implemented~n', [Type, Args]), halt(1).
+        throwerr('~p(~p) is not yet implemented~n', [Type, Args]).
 
 %% generate the TR for a module instantiation
 mk_next_module_inst(Res) :-
@@ -470,20 +477,26 @@ user:runtime_entry(start) :-
         main.
 
 test :-
-        % current_directory(Dir), print(Dir),
-        runInput(['../examples/verilog/.stall.pl']).
+        current_directory(Dir), print(Dir),
+        % Input = '../examples/verilog/.stall.pl',
+        Input = '../../../papers/risc-timing/examples/.472-mips-fragment.pl',
+        print(Input),
+        runInput([Input]).
 
 %% #############################################################################
 %% ### UTILITY PREDICATES ######################################################
 %% #############################################################################
 
 ir_stmt([
+         block,
+         n_asn,
          nb_asn,
          ite
         ]).
 
 ir_toplevel_list([
                   register, wire, module_inst, always,
+                  link, asn,
                   taint_source, taint_sink
                  ]).
 
@@ -492,16 +505,16 @@ done_atom('done').
 
 query_ir(P, Ls) :-
         ( findall(F, current_predicate(P,F), [_,_|_]) ->
-            format('~p has multiple arities !', [P]), halt(1)
+            throwerr('~p has multiple arities !', [P])
         ; ir_toplevel_list(IR), \+ memberchk(P, IR) ->
-            format('~p does not belong to the IR !', [P]), halt(1)
+            throwerr('~p does not belong to the IR !', [P])
         ; true
         ),                      % sanity check
         ( current_predicate(P,F), functor(F,N,A)  ->
             ( A = 1 -> findall(X,     call(N,X),     Ls)
             ; A = 2 -> findall(X-Y,   call(N,X,Y),   Ls)
             ; A = 3 -> findall(X-Y-Z, call(N,X,Y,Z), Ls)
-            ; (format('Unknown predicate in query: ~p~n', [P]), halt(1))
+            ; throwerr('Unknown predicate in query: ~p~n', [P])
             )
         ; Ls=[]
         ).
@@ -592,8 +605,7 @@ fold(P,A,[H|T],R) :-
         fold(P,A2,T,R).
 
 fold(_,_,T,_) :-
-        format('~n!!! fold for ~p is not yet implemented !!!~n', [T]),
-        halt(1).
+        throwerr('~n!!! fold for ~p is not yet implemented !!!~n', [T]).
 
 flip(A,F,R) :- call(F,A,R).
 

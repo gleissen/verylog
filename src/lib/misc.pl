@@ -17,7 +17,9 @@
                  droplist/3,
                  mk_sum/2,
                  flatten/2,
-                 contains/2
+                 contains/2,
+                 throwerr/2,
+                 warn/2
 		], [hidden(true)]).
 :- use_module(library(codesio)).
 :- use_module(library(ordsets)).
@@ -148,3 +150,10 @@ flatten([H|T], L) :-
         append(H, L2, L).
 
 contains(List, Elem) :- memberchk(Elem, List).
+
+throwerr(Format,Args) :-
+        warn(Format,Args),
+        halt(1).
+
+warn(Format,Args) :-
+        format(user_error, Format, Args).
