@@ -2,6 +2,7 @@
 
 THIS_DIR=${0:A:h}
 APP=$THIS_DIR/vcgen
+MAIN_PL='src/verylog.pl' 
 
 zparseopts -D -E -- \
            -no-interpreter=NO_INTERPRETER -just-ir=JUST_IR -just-vcgen=JUST_VCGEN \
@@ -31,9 +32,20 @@ FILENAME="${@[-1]}"
 shift -p 1
 
 if [[ ! -f $FILENAME ]]; then
-    echo "'$FILENAME' is not a regular file"
+    echo "'$FILENAME' is not a regular file" 1>&2
+    exit 1
+elif  [[ "${FILENAME:t:e}" != "v" ]]; then
+    echo "'$FILENAME' does not have the verilog extension (.v)" 1>&2
+    exit 1
+elif [[ $# -ne 0 ]]; then
+    echo "unrecognized arguments: $@" 1>&2
     exit 1
 fi
+
+PREPROCESSED_FILE=${FILENAME:A:h}/.${FILENAME:t:r}.preproc.v
+IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
+HSF_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
+LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
 
 CONF_FILE="${THIS_DIR}/configuration.sh"
 CONF_SKELETON_FILE="${THIS_DIR}/configuration-skeleton.sh"
@@ -45,47 +57,50 @@ if [[ -f "$CONF_FILE" ]]; then
     IVLPP=${IVL_DIR:A}/ivlpp/ivlpp
     
     if [[ -z "${IVL_DIR}" || ! -x "$IVL" || ! -x "$IVLPP" ]]; then
-        echo "IVL_DIR variable in ${CONF_FILE:t} does not seem right"
-        echo "currently it's set to ${IVL_DIR:A}"
+        echo "IVL_DIR variable in ${CONF_FILE:t} does not seem right" 1>&2
+        echo "currently it's set to ${IVL_DIR:A}" 1>&2
         exit 1
     fi
     
     QARMC=${HORN_SOLVE_DIR:A}/qarmc5/qarmc
     
     if [[ -z "${HORN_SOLVE_DIR}" || ! -x "$QARMC" ]]; then
-        echo "HORN_SOLVE_DIR variable in ${CONF_FILE:t} does not seem right"
-        echo "currently it's set to ${HORN_SOLVE_DIR:A}"
+        echo "HORN_SOLVE_DIR variable in ${CONF_FILE:t} does not seem right" 1>&2
+        echo "currently it's set to ${HORN_SOLVE_DIR:A}" 1>&2
         exit 1
     fi
 
 else
-    echo "missing ${CONF_FILE}"
-    echo "please use the file ${CONF_SKELETON_FILE:t} as a skeleton to create that file"
+    echo "missing ${CONF_FILE}" 1>&2
+    echo "please use the file ${CONF_SKELETON_FILE:t} as a skeleton to create that file" 1>&2
     exit 1
 fi
 
-if [[ -x "$(which rlwrap)" ]]; then
+if [[ -x "$(which rlwrap)" && -n "$TERM" && "$TERM" != "dumb" ]]; then
     alias sicstus='rlwrap sicstus'
 else
     alias sicstus='sicstus'
 fi
 
-LOGFILE="$THIS_DIR/.log.$(date +%F-%H-%M-%S)"
-
+# output of this function is redirected to the IR_FILE
 print_IR() {
-    (  echo '% vim: set ft=prolog\n:- discontiguous register/1, wire/1, asn/2, module_inst/3.' && $IVL $@ -O >(cat) =($IVLPP $FILENAME) &>$LOGFILE && sed -n 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $FILENAME ) || echo 'parse_failed(true).' 
+    echo '% vim: set ft=prolog\n:- discontiguous register/1, wire/1, asn/2, module_inst/3.' && \
+        $IVLPP $FILENAME 1>$PREPROCESSED_FILE && \
+        $IVL $@ -O >(cat) $PREPROCESSED_FILE &>$LOGFILE && \
+        sed -n 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $FILENAME  
+    
+    last_err=$?
+
+    if [[ $last_err -ne 0 ]]; then
+        [[ -f "$LOGFILE" ]] && cat $LOGFILE 1>&2
+        echo "[PARSER ERROR]" 1>&2
+        exit 1
+    fi
+
+    rm -f "$LOGFILE" "$PREPROCESSED_FILE"
 }
 
-IR_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.pl
-HSF_FILE=${FILENAME:A:h}/.${FILENAME:t:r:r:r}.hsf.pl
-
 print_IR $TOPLEVEL_MODULE > $IR_FILE
-last_err=$?
-
-if [[ $last_err -ne 0 ]]; then
-    echo "error while generating the IR file"
-    exit 1
-fi
 
 if [[ -n "$JUST_IR" ]]; then
     cat $IR_FILE
@@ -97,7 +112,7 @@ if [[ -z "${NO_INTERPRETER}" ]]; then
 
     sicstus \
         -f --noinfo --nologo \
-        -l 'src/verilog.pl' \
+        -l "$MAIN_PL" \
         --goal '(main -> halt; halt(1)).' \
         -- $IR_FILE > $HSF_FILE
     
@@ -105,20 +120,17 @@ if [[ -z "${NO_INTERPRETER}" ]]; then
 
     if [[ $last_err -ne 0 ]]; then
         echo "[PROLOG ERROR]" 1>&2
-        cat $LOGFILE
         exit 1 
-    else
-        rm -f $LOGFILE
     fi
 
     popd
 else
-    if make -s -C ${THIS_DIR} && $APP $IR_FILE > $HSF_FILE
-    then
-        rm -f $LOGFILE
-    else
+    make -s -C ${THIS_DIR} && $APP $IR_FILE > $HSF_FILE
+
+    last_err=$?
+
+    if [[ $last_err -ne 0 ]]; then
         echo "[PROLOG ERROR]" 1>&2
-        cat $LOGFILE
         exit 1 
     fi
 fi
@@ -129,6 +141,9 @@ if [[ -n "$JUST_VCGEN" ]]; then
     exit 0
 fi
 
+$QARMC $HSF_FILE
+
+echo
 echo '################################################################################'
 echo '# TEMPORARY FILES ##############################################################'
 echo '################################################################################'
@@ -136,5 +151,4 @@ echo "IR  file : ${IR_FILE}"
 echo "HSF file : ${HSF_FILE}"
 echo '################################################################################'
 
-$QARMC $HSF_FILE
 

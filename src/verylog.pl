@@ -1,121 +1,15 @@
-:- discontiguous small/1.
-
-:- use_module('lib/misc.pl', [format_atom/3,
-			      get_fresh_num/1,
-			      mk_and/2,
-			      mk_and/3,
-                              mk_sum/2,
-                              contains/2,
-                              flatten/2,
-                              throwerr/2,
-                              warn/2
-                              ]).
-
-:- use_module('lib/utils.pl').
-:- use_module(library(lists)).
-:- use_module(library(file_systems)).
-
-:- dynamic
-        cond_atoms/1,
-        ite/4
-        .
-
-:-
-        retractall(cond_atoms(_)),
-        retractall(ite(_,_,_,_)).
-        
-
-/*
-==========================================
-Clauses used in the intermediate language:
-==========================================
-register(R)
-wire(W)
-link(InstName, InputArgs, OutputArgs)
-always(Event, Statement)
-taint_source(R)
-taint_sink(R)
-nb_asn(Lhs,Rhs)
-*/
-
 /*
 Creates Horn clause verification conditions from a intermediate language verilog file.
 */
-%% #############################################################################
-%% ### INITIAL PASS OVER THE PROGRAM ###########################################
-%% #############################################################################
 
+:- use_module(library(lists)).
+:- use_module(library(file_systems)).
 
-run_initial_pass :-
-        ir_toplevel_list(TopLevelPredicates),
-        (   foreach(P, TopLevelPredicates)
-        do  query_ir(P, PInsts),
-            maplist(run_initial_toplevels(P), PInsts, _)
-        ).
+:- use_module('lib/misc.pl').
+:- use_module('lib/ir.pl').
 
-run_initial_toplevels(always, _Event-Stmt, _) :-
-        !, Stmt =.. [Type|Args],
-        run_initial_stmt(Type, Args, _).
-
-run_initial_toplevels(module_inst, _Name-_Inputs-_Outputs, _) :- !.
-
-run_initial_toplevels(link,_UFOut-_UFIns,_) :- !.
-run_initial_toplevels(asn,_Lhs-_Rhs,_) :- !.
-
-run_initial_toplevels(register,_,_) :- !.
-run_initial_toplevels(wire,_,_) :- !.
-run_initial_toplevels(taint_source,_,_) :- !.
-run_initial_toplevels(taint_sink,_,_) :- !.
-
-run_initial_toplevels(TL,P,_) :-
-        throwerr('run_initial_toplevels is not yet implemented for ~p as in ~p~n', [TL,P]).
-
-run_initial_stmt(ite,[Id,Cond,Then,Else], _) :-
-        !,
-        assert(ite(Id,Cond,Then,Else)),
-        ( \+ atom(Then)
-        ; Then =.. [TypeThen|ArgThen], run_initial_stmt(TypeThen, ArgThen,_)
-        ),
-        ( \+ atom(Else)
-        ; Else =.. [TypeElse|ArgElse], run_initial_stmt(TypeElse, ArgElse,_)
-        ).
-
-run_initial_stmt(nb_asn,[_Lhs,_Rhs], _) :- !.
-
-run_initial_stmt(block,[Stmts], _) :- !,
-        (   foreach(Stmt, Stmts)
-        do  Stmt =.. [Type|Args],
-            run_initial_stmt(Type,Args,_)
-        ).
-
-run_initial_stmt(Type,Args,_) :-
-        ir_stmt(Stmts),
-        (   memberchk(Type, Stmts), 
-            throwerr('missing run_initial_stmt for ~p(~p)~n', [Type,Args])
-        ;   throwerr('invalid: run_initial_stmt for ~p(~p)~n', [Type,Args])
-        ).
-        
-
-%% #############################################################################
-%% ### INITIAL STATES AND PROPERTY #############################################
-%% #############################################################################
-
-%% prints the query_naming predicated required by qarmc
-%% i.e. query_naming(inv(...)).
-mk_query_naming(Res) :-
-        mk_vcs_vars(Vs),
-        maplist(mk_atom_name, Vs, _VsAtoms),
-        (   foreach(V, _VsAtoms),
-            foreach(V1, VsAtoms),
-            param(VsAtoms)
-        do  (   atom_chars(V, ['v', '_', 'V', '_', 'v', '_'|_]) ->
-                sub_atom(V,4,_,0,V1)
-            ;   V1 = V
-            )
-        ),
-        mk_and(VsAtoms,And),
-        format_atom('query_naming(inv(~p)).', [And], Res).
-
+:- use_module('initial_run.pl').
+:- use_module('query_naming.pl').
 
 %% #############################################################################
 %% ### TRANSITION RELATION #####################################################
@@ -165,7 +59,7 @@ mk_next_def(Res) :-
 %% update done if sink's tag > 0
 %% ite(sink_t >= 1, Done1 = 1, Done1 = Done)
 mk_next_sink_cond(Res) :-
-        ( taint_sink(_Sink) -> 
+        ( ir:taint_sink(_Sink) -> 
             mk_tagvar_name(_Sink, Sink), mk_primed(Sink,Sink1),
             done_var(Done), mk_primed(Done,Done1),
             format_atom('ite(~p >= 1, ~p = 1, ~p = ~p)',[Sink1, Done1, Done1, Done], Res)
@@ -251,14 +145,6 @@ mk_next_helper_assign_op(Res) :-
 mk_next_sep(P,Res) :-
         format_atom('~n  ~p', [P], Res).
 
-mk_next_vars(Vs) :-
-        get_all_vars(Vars),
-        mk_next_vars(Vars,Vs).
-
-mk_next_vars(Vars,Vs) :-
-        maplist(mk_primed, Vars, Vars1),
-        append(Vars,Vars1,Vs).
-        
 
 %% #############################################################################
 %% ### VERIFICATION CONDITION GENERATION #######################################
@@ -382,7 +268,7 @@ mk_vcs_main_next_step(Res) :-
 
         %% TODO: fix this hack
         %% get_cond_vars(CondVars),
-        findall(C, ite(_Id,C,_Then,_Else), CondAtoms),
+        findall(C, ir:ite(_Id,C,_Then,_Else), CondAtoms),
         maplist(mk_var_name,CondAtoms,CondVars),
         (   foreach(CV, CondVars),
             foreach(CE, CES),
@@ -418,12 +304,6 @@ mk_vcs_main_given_inv(Res) :-
         mk_and(VcsVars,VcsArgs),
         format_atom('inv(~p)', [VcsArgs], Res).
 
-mk_vcs_vars(Vs) :-
-        get_all_vars(AllVars),
-        maplist(mk_lhs_name, AllVars, LeftVars),
-        maplist(mk_rhs_name, AllVars, RightVars),
-        append(LeftVars,RightVars,Vs).
-
 mk_property(Res) :-
         done_var(Done),
         maplist(flip(Done), [mk_lhs_name, mk_rhs_name], [DoneL, DoneR]),
@@ -437,11 +317,6 @@ mk_property(Res) :-
 %% #############################################################################
 
 mk_output_file(Res) :-
-        % Res0 = '',
-        % Res1 = '',
-        % Res2 = '',
-        % Res3 = '',
-
 	mk_query_naming(Naming),
         format_atom('~p', [Naming], Res0),
 
@@ -458,155 +333,16 @@ mk_output_file(Res) :-
 	
 main :-
         prolog_flag(argv, [Input|_]),
-        runInput(Input).
+        read_ir(Input),
+        runInput.
 
-runInput(Input) :-
-        % print_file(Input),
-        my_consult(Input),
+runInput :-
         run_initial_pass,
 	mk_output_file(Res),
 	format('~p',[Res]).
         
-my_consult(File) :-
-        % flush_db,
-        consult(File),
-        (current_predicate(parse_failed/1) -> halt(1); true),
-        true.
-
 user:runtime_entry(start) :-
         main.
 
-test :-
-        current_directory(Dir), print(Dir),
-        % Input = '../examples/verilog/.stall.pl',
-        Input = '../../../papers/risc-timing/examples/.472-mips-fragment.pl',
-        print(Input),
-        runInput([Input]).
-
-%% #############################################################################
-%% ### UTILITY PREDICATES ######################################################
-%% #############################################################################
-
-ir_stmt([
-         block,
-         n_asn,
-         nb_asn,
-         ite
-        ]).
-
-ir_toplevel_list([
-                  register, wire, module_inst, always,
-                  link, asn,
-                  taint_source, taint_sink
-                 ]).
-
-done_var('Done').
-done_atom('done').
-
-query_ir(P, Ls) :-
-        ( findall(F, current_predicate(P,F), [_,_|_]) ->
-            throwerr('~p has multiple arities !', [P])
-        ; ir_toplevel_list(IR), \+ memberchk(P, IR) ->
-            throwerr('~p does not belong to the IR !', [P])
-        ; true
-        ),                      % sanity check
-        ( current_predicate(P,F), functor(F,N,A)  ->
-            ( A = 1 -> findall(X,     call(N,X),     Ls)
-            ; A = 2 -> findall(X-Y,   call(N,X,Y),   Ls)
-            ; A = 3 -> findall(X-Y-Z, call(N,X,Y,Z), Ls)
-            ; throwerr('Unknown predicate in query: ~p~n', [P])
-            )
-        ; Ls=[]
-        ).
-
-add_suffix(S,X,X1) :-
-        format_atom('~p~p', [X,S], X1).
-
-add_prefix(P,X,X1) :-
-        format_atom('~p~p', [P,X], X1).
-
-mk_var_name(ID, VarName) :-
-        add_prefix('V_', ID, VarName).
-
-mk_lhs_name(ID, VarName) :-
-        add_suffix('L', ID, VarName).
-
-mk_rhs_name(ID, VarName) :-
-        add_suffix('R', ID, VarName).
-
-mk_tag_name(ID, VarName) :-
-        add_suffix('_t', ID, VarName).
-
-mk_tagvar_name(ID, TagVarName) :-
-        dot([mk_var_name, mk_tag_name], ID, TagVarName).
-
-mk_tagvarprimed_name(ID, TagVarName) :-
-        dot([mk_primed, mk_var_name, mk_tag_name], ID, TagVarName).
-
-mk_atom_name(ID, AtomName) :-
-        add_prefix('v_', ID, AtomName).
-
-mk_primed(X,X1) :-
-        add_suffix('1', X, X1).
-
-mk_nl(X,X1) :-
-        format_atom('~p~n', [X], X1).
-
-mk_ite_cond_atom(Id, Cond) :-
-        format_atom('cond_~p_', [Id], Cond).
-
-mk_ite_cond_var(Id, Cond) :-
-        dot([mk_var_name, mk_ite_cond_atom], Id, Cond).
-
-mk_ite(Cond,Then,Else,Res) :-
-        format_atom('ite(~p, ~p, ~p)', [Cond, Then, Else], Res).
-
-missing_atom(P, Res) :-
-        inline_comment(P, Comment),
-        format_atom('~p true', [Comment], Res).
-
-inline_comment(P, Comment) :-
-        atom_codes(CB, "/*"),
-        atom_codes(CE, "*/"),
-        format_atom('~p ~p ~p', [CB, P, CE], Comment).
-
-dot([],In,In).
-dot([H|T],In,Out) :-
-        dot(T, In, _Out),
-        call(H, _Out, Out).
-
-get_reg_vars(VsRegVars) :-
-        query_ir(register,VsRegs),
-        maplist(mk_var_name,VsRegs,VsRegVars).
-
-get_tag_vars(VsTagVars) :-
-        query_ir(register,VsRegs),
-        maplist(mk_tagvar_name,VsRegs,VsTagVars).
-
-get_cond_vars(Conds) :-
-        findall(X, cond_atoms(X), _CondAtoms),
-        remove_dups(_CondAtoms,CondAtoms),
-        maplist(mk_var_name,CondAtoms,Conds).
-
-get_other_vars([Done|Conds]) :-
-        done_var(Done),
-        get_cond_vars(Conds).
-
-get_all_vars(VsAllVars) :-
-        get_reg_vars(VsRegVars),
-        get_tag_vars(VsTagVars),
-        get_other_vars(VsOtherVars),
-        flatten([VsRegVars,VsTagVars,VsOtherVars], VsAllVars).
-
-fold(_,A,[],A) :- !.
-fold(P,A,[H|T],R) :-
-        !,
-        call(P,A,H,A2),
-        fold(P,A2,T,R).
-
-fold(_,_,T,_) :-
-        throwerr('~n!!! fold for ~p is not yet implemented !!!~n', [T]).
-
-flip(A,F,R) :- call(F,A,R).
-
+test :- read_ir, runInput.
 

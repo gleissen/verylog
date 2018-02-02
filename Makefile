@@ -1,5 +1,5 @@
 APP=vcgen
-MAIN_FILE=src/verilog.pl
+MAIN_FILE=src/verylog.pl
 OTHER_FILES=$(wildcard src/lib/*.pl)
 
 all: $(APP)

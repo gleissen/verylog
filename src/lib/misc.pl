@@ -19,7 +19,27 @@
                  flatten/2,
                  contains/2,
                  throwerr/2,
-                 warn/2
+                 warn/2,
+                 print_file/1,
+                 add_suffix/3,
+                 add_prefix/3,
+                 mk_var_name/2,
+                 mk_lhs_name/2,
+                 mk_rhs_name/2,
+                 mk_tag_name/2,
+                 mk_tagvar_name/2,
+                 mk_tagvarprimed_name/2,
+                 mk_atom_name/2,
+                 mk_primed/2,
+                 mk_nl/2,
+                 mk_ite_cond_atom/2,
+                 mk_ite_cond_var/2,
+                 mk_ite/4,
+                 missing_atom/2,
+                 inline_comment/2,
+                 dot/3,
+                 fold/4,
+                 flip/3
 		], [hidden(true)]).
 :- use_module(library(codesio)).
 :- use_module(library(ordsets)).
@@ -157,3 +177,82 @@ throwerr(Format,Args) :-
 
 warn(Format,Args) :-
         format(user_error, Format, Args).
+
+print_file(File) :-
+        open(File, read, Stream),
+        print_file_helper(Stream),
+        close(Stream) .
+
+print_file_helper(Stream) :-
+        read(Stream, X),
+        ( \+ at_end_of_stream(Stream) ->
+            (format('~p~n', [X]), print_file_helper(Stream))
+        ; true
+        ).
+
+add_suffix(S,X,X1) :-
+        format_atom('~p~p', [X,S], X1).
+
+add_prefix(P,X,X1) :-
+        format_atom('~p~p', [P,X], X1).
+
+mk_var_name(ID, VarName) :-
+        add_prefix('V_', ID, VarName).
+
+mk_lhs_name(ID, VarName) :-
+        add_suffix('L', ID, VarName).
+
+mk_rhs_name(ID, VarName) :-
+        add_suffix('R', ID, VarName).
+
+mk_tag_name(ID, VarName) :-
+        add_suffix('_t', ID, VarName).
+
+mk_tagvar_name(ID, TagVarName) :-
+        dot([mk_var_name, mk_tag_name], ID, TagVarName).
+
+mk_tagvarprimed_name(ID, TagVarName) :-
+        dot([mk_primed, mk_var_name, mk_tag_name], ID, TagVarName).
+
+mk_atom_name(ID, AtomName) :-
+        add_prefix('v_', ID, AtomName).
+
+mk_primed(X,X1) :-
+        add_suffix('1', X, X1).
+
+mk_nl(X,X1) :-
+        format_atom('~p~n', [X], X1).
+
+mk_ite_cond_atom(Id, Cond) :-
+        format_atom('cond_~p_', [Id], Cond).
+
+mk_ite_cond_var(Id, Cond) :-
+        dot([mk_var_name, mk_ite_cond_atom], Id, Cond).
+
+mk_ite(Cond,Then,Else,Res) :-
+        format_atom('ite(~p, ~p, ~p)', [Cond, Then, Else], Res).
+
+missing_atom(P, Res) :-
+        inline_comment(P, Comment),
+        format_atom('~p true', [Comment], Res).
+
+inline_comment(P, Comment) :-
+        atom_codes(CB, "/*"),
+        atom_codes(CE, "*/"),
+        format_atom('~p ~p ~p', [CB, P, CE], Comment).
+
+dot([],In,In).
+dot([H|T],In,Out) :-
+        dot(T, In, _Out),
+        call(H, _Out, Out).
+
+fold(_,A,[],A) :- !.
+fold(P,A,[H|T],R) :-
+        !,
+        call(P,A,H,A2),
+        fold(P,A2,T,R).
+
+fold(_,_,T,_) :-
+        throwerr('~n!!! fold for ~p is not yet implemented !!!~n', [T]).
+
+flip(A,F,R) :- call(F,A,R).
