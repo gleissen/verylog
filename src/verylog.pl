@@ -2,6 +2,8 @@
 Creates Horn clause verification conditions from a intermediate language verilog file.
 */
 
+:- module(verylog, [main/0], [hidden(true)]).
+
 :- use_module(library(lists)).
 :- use_module(library(file_systems)).
 
@@ -14,14 +16,18 @@ Creates Horn clause verification conditions from a intermediate language verilog
 :- use_module('vcgen.pl').
 
 mk_output_file(Res) :-
-	mk_query_naming(Naming),
-        format_atom('~p', [Naming], Res0),
+        Res0 = '',
+        % Res1 = '',
+        Res2 = '',
+        
+	% mk_query_naming(Naming),
+        % format_atom('~p', [Naming], Res0),
 
 	mk_next(Next),
         format_atom('~p', [Next], Res1),
 
-	mk_vcs(Vcs),
-        format_atom('~p', [Vcs], Res2),
+	% mk_vcs(Vcs),
+        % format_atom('~p', [Vcs], Res2),
 
         format_atom('~n~n~p~n~n~p~n~n~p', [Res0, Res1, Res2], Res),
         true.
@@ -36,8 +42,3 @@ runInput :-
 	mk_output_file(Res),
 	format('~p',[Res]).
         
-user:runtime_entry(start) :-
-        main.
-
-test :- read_ir, runInput.
-

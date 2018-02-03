@@ -2,6 +2,7 @@
 
 :- use_module(library(lists)).
 
+:- use_module('lib/misc.pl').
 :- use_module('lib/ir.pl').
 
 %% #############################################################################
@@ -33,17 +34,24 @@ run_initial_toplevels(taint_sink,_,_) :- !.
 run_initial_toplevels(TL,P,_) :-
         throwerr('run_initial_toplevels is not yet implemented for ~p as in ~p~n', [TL,P]).
 
-run_initial_stmt(ite,[Id,Cond,Then,Else], _) :-
+run_initial_stmt(ite,[Cond,Then,Else], _) :-
         !,
-        save(ite(Id,Cond,Then,Else)),
-        ( \+ atom(Then)
-        ; Then =.. [TypeThen|ArgThen], run_initial_stmt(TypeThen, ArgThen,_)
+        ( \+ atom(Cond) -> throwerr('condition of ite(~p, ~p, ~p) is not an atom', [Cond,Then,Else])
+        ; true
         ),
-        ( \+ atom(Else)
-        ; Else =.. [TypeElse|ArgElse], run_initial_stmt(TypeElse, ArgElse,_)
+        (   compound(Then) ->
+            Then =.. [TypeThen|ArgThen],
+            run_initial_stmt(TypeThen, ArgThen,_)
+        ;   true
+        ),
+        (   compound(Else) ->
+            Else =.. [TypeElse|ArgElse],
+            run_initial_stmt(TypeElse, ArgElse,_)
+        ;   true
         ).
 
 run_initial_stmt(nb_asn,[_Lhs,_Rhs], _) :- !.
+run_initial_stmt(b_asn,[_Lhs,_Rhs], _) :- !.
 
 run_initial_stmt(block,[Stmts], _) :- !,
         (   foreach(Stmt, Stmts)

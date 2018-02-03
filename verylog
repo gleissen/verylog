@@ -7,7 +7,8 @@ fi
 
 THIS_DIR=${0:A:h}
 APP=$THIS_DIR/vcgen
-MAIN_PL='src/verylog.pl' 
+MAIN_MODULE='verylog' 
+MAIN_PL="src/${MAIN_MODULE}.pl" 
 
 zparseopts -D -E -- \
            -no-interpreter=NO_INTERPRETER -just-ir=JUST_IR -just-vcgen=JUST_VCGEN \
@@ -105,7 +106,12 @@ EOF
     last_err=$?
 
     if [[ $last_err -ne 0 ]]; then
-        [[ -f "$LOGFILE" ]] && cat $LOGFILE 1>&2
+        if [[ -f "$LOGFILE" && "$(wc -l $LOGFILE | cut -d' ' -f1)" -gt 0 ]]; then
+            cat $LOGFILE 1>&2
+        else
+            echo "error while running $IVL $@ -O >(cat) $PREPROCESSED_FILE, running again ..." 1>&2
+            $IVL $@ -O >(cat 1>&2) $PREPROCESSED_FILE
+        fi
         echo "[PARSER ERROR]" 1>&2
         exit 1
     fi
@@ -126,7 +132,7 @@ if [[ -z "${NO_INTERPRETER}" ]]; then
     sicstus \
         -f --noinfo --nologo \
         -l "$MAIN_PL" \
-        --goal '(main -> halt; halt(1)).' \
+        --goal "(${MAIN_MODULE}:main -> halt; halt(1))." \
         -- $IR_FILE > $HSF_FILE
     
     last_err=$?

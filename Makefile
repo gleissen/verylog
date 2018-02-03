@@ -1,6 +1,6 @@
 APP=vcgen
-MAIN_FILE=src/verylog.pl
-OTHER_FILES=$(wildcard src/lib/*.pl)
+MAIN_FILE=src/runtime.pl
+OTHER_FILES=$(wildcard src/*.pl) $(wildcard src/lib/*.pl)
 
 all: $(APP)
 

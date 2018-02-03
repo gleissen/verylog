@@ -8,13 +8,13 @@
                done_atom/1,
                get_reg_vars/1,
                get_tag_vars/1,
-               get_cond_vars/1,
                get_other_vars/1,
                get_all_vars/1,
                save/1,
                mk_vcs_vars/1,
                mk_next_vars/1,
-               mk_next_vars/2
+               mk_next_vars/2,
+               is_uf/1
               ], [hidden(true)]).
 
 :- use_module(library(lists)).
@@ -30,6 +30,7 @@ module_inst(ModuleName, Inputs, Outputs)
 always(Event, Statement)
 taint_source(R)
 taint_sink(R)
+ite(Cond,Then,Else)
 asn(Lhs,Rhs)     // assign L = R
 b_asn(Lhs,Rhs)   // L = R
 nb_asn(Lhs,Rhs)  // L <= R
@@ -39,7 +40,7 @@ link(OutputName, InputVars)
 :- multifile register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1.
 :- dynamic   register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1.
 
-:- dynamic cond_atoms/1, ite/4.
+:- dynamic cond_vars/1, ite/4.
 
 wipe_db :-
         retractall(register(_)),
@@ -51,7 +52,7 @@ wipe_db :-
         retractall(taint_sink(_)),
         retractall(taint_source(_)),
 
-        retractall(cond_atoms(_)),
+        retractall(cond_vars(_)),
         retractall(ite(_,_,_,_)),
 
         true.
@@ -63,7 +64,7 @@ save(X) :-
 
 ir_stmt([
          block,
-         n_asn,
+         b_asn,
          nb_asn,
          ite
         ]).
@@ -110,14 +111,10 @@ get_tag_vars(VsTagVars) :-
         query_ir(register,VsRegs),
         maplist(mk_tagvar_name,VsRegs,VsTagVars).
 
-get_cond_vars(Conds) :-
-        findall(X, cond_atoms(X), _CondAtoms),
-        remove_dups(_CondAtoms,CondAtoms),
-        maplist(mk_var_name,CondAtoms,Conds).
-
-get_other_vars([Done|Conds]) :-
+get_other_vars([Done|UFVars]) :-
         done_var(Done),
-        get_cond_vars(Conds).
+        findall(X, link(X,_), UFAtoms),
+        maplist(mk_var_name, UFAtoms, UFVars).
 
 get_all_vars(VsAllVars) :-
         get_reg_vars(VsRegVars),
@@ -142,3 +139,5 @@ mk_next_vars(Vars,Vs) :-
         maplist(mk_primed, Vars, Vars1),
         append(Vars,Vars1,Vs).
         
+is_uf(Atom) :-
+        atom(Atom), link(Atom, _).

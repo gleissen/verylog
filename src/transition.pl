@@ -13,24 +13,25 @@ mk_next(Res) :-
         mk_next_helper_predicates(Helper),
 	mk_next_def(Hd),
 
-        mk_next_always(_Always),
-        mk_next_sep(_Always,Always),
-
-        mk_next_module_inst(_Module),
-        mk_next_sep(_Module,Module),
-
-	mk_next_sink_cond(_Sink),
-        mk_next_sep(_Sink,Sink),
+        ir_toplevel_list(TLPs),
+        maplist(dot([transition:mk_next_sep, transition:mk_next_toplevel]), TLPs, Rs),
+        mk_and(Rs,RsAnd),
 
         mk_next_incr(_Incr),
         mk_next_sep(_Incr,Incr),
 
-	format_atom(
-                    '~p~p :=~n(~p,~p,~p,~p~n).',
-                    [Helper, Hd, Always, Module, Sink, Incr],
-                    Res
-                   ),
-        true.
+	format_atom('~p~p :=~n(~p,~p~n).', [Helper, Hd, RsAnd, Incr], Res).
+
+mk_next_toplevel(always, Res)        :- !, mk_next_always(Res).
+mk_next_toplevel(module_inst, Res)   :- !, mk_next_module_inst(Res).
+mk_next_toplevel(taint_sink, Res)    :- !, mk_next_sink_cond(Res).
+mk_next_toplevel(asn, Res)           :- !, mk_next_asn(Res).
+mk_next_toplevel(link, true)         :- !.
+mk_next_toplevel(taint_source, true) :- !.
+mk_next_toplevel(register, true)     :- !.
+mk_next_toplevel(wire, true)         :- !.
+mk_next_toplevel(TLP, _) :-
+        throwerr('mk_next_toplevel for ~p is not yet implemented !', [TLP]).
 
 mk_next_helper_predicates(Res) :-
         HelperPredicates = [ mk_next_helper_assign_op ],
@@ -60,10 +61,21 @@ mk_next_sink_cond(Res) :-
         ; throwerr('no taink_sink predicate !', [])
         ).
 
-%% generates the line for 'Done = 0, T1 = T + 1'
+%% generates the line for 'Done = 0'
 mk_next_incr(Res) :-
         done_var(Done),
         format_atom('~p = 0', [Done], Res).
+
+mk_next_asn(Res) :-
+        query_ir(asn, Asns),
+        (   foreach(Lhs-Rhs, Asns),
+            foreach(R, Rs),
+            param(Rs)
+        do  mk_next_assign_op(Lhs,Rhs,_R),
+            mk_next_sep(_R,R)
+        ),
+        mk_and(Rs,Res).
+        
 
 %% generate the TR for the statements inside the always blocks
 mk_next_always(Res) :-
@@ -91,19 +103,33 @@ mk_next_stmt(Stmt,Res) :-
 mk_next_stmt_helper(nb_asn, [L,R], Res) :-
         !, mk_next_assign_op(L,R,Res).
 
+mk_next_stmt_helper(b_asn, [L,R], Res) :-
+        !, mk_next_assign_op(L,R,Res).
+
 %% generate the TR for an if statement
-mk_next_stmt_helper(ite, [Id, _Cond, Then, Else], Res) :-
+mk_next_stmt_helper(ite, [Cond, Then, Else], Res) :-
         !,
-        (   atom(_Cond) -> mk_var_name(_Cond,Cond)
-        ;   throwerr('non-atom condition is not yet supported in ite(~p,~p,~p,~p)', [Id, _Cond, Then, Else])
-        ),
-        % mk_ite_cond_var(Id, CondTempVar),
+        mk_var_name(Cond, CondVar),
         mk_next_stmt(Then, ThenRes),
         mk_next_stmt(Else, ElseRes),
-        format_atom('((~p >= 1), (~p) ; (~p =< 0), (~p))', [Cond, ThenRes, Cond, ElseRes], Res).
+        format_atom('((~p >= 1), (~p) ; (~p =< 0), (~p))',
+                    [CondVar, ThenRes, CondVar, ElseRes],
+                    Res).
+
+mk_next_stmt_helper(block, [Stmts], Res) :-
+        !,
+        (   foreach(S,Stmts),
+            foreach(R,Rs),
+            param(Rs)
+        do  S =.. [Type|Args],
+            mk_next_stmt_helper(Type,Args,R)
+        ),
+        mk_and(Rs,RsAnd),
+        format_atom('(~p)', [RsAnd], Res).
+            
 
 mk_next_stmt_helper(Type, Args, _) :-
-        throwerr('~p(~p) is not yet implemented~n', [Type, Args]).
+        throwerr('mk_next_stmt_helper for ~p(~p) is not yet implemented~n', [Type, Args]).
 
 %% generate the TR for a module instantiation
 mk_next_module_inst(Res) :-
@@ -127,11 +153,21 @@ mk_next_module_helper(_Name-Inputs-Outputs,Res) :-
 
 mk_next_assign_op(L,R,Res) :-
         !,
-        mk_var_name(L,LV), mk_primed(LV,LV1),
-        mk_var_name(R,RV),
-        mk_tagvar_name(L,LT), mk_primed(LT,LT1),
-        mk_tagvar_name(R,RT),
-        format_atom('assign_op(~p, ~p, ~p, ~p)', [LT1, RT, LV1, RV], Res).
+        (   is_uf(R) ->
+            missing_atom(R, Res)
+        ;   R = const_expr ->
+            Res = true
+        ;   atom(R) ->
+            mk_var_name(L,LV), mk_primed(LV,LV1),
+            mk_var_name(R,RV),
+            mk_tagvar_name(L,LT), mk_primed(LT,LT1),
+            mk_tagvar_name(R,RT),
+            format_atom('assign_op(~p, ~p, ~p, ~p)', [LT1, RT, LV1, RV], Res)
+        ;   number(R) ->
+            Res = true
+        ;   otherwise ->
+            throwerr('cannot assign ~p to ~p', [R, L])
+        ).
 
 mk_next_helper_assign_op(Res) :-
         format_atom('assign_op(LT1, RT, LV1, RV) :- LT1 = RT, LV1 = RV.', [], Res).

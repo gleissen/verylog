@@ -32,8 +32,6 @@
                  mk_atom_name/2,
                  mk_primed/2,
                  mk_nl/2,
-                 mk_ite_cond_atom/2,
-                 mk_ite_cond_var/2,
                  mk_ite/4,
                  missing_atom/2,
                  inline_comment/2,
@@ -171,12 +169,9 @@ flatten([H|T], L) :-
 
 contains(List, Elem) :- memberchk(Elem, List).
 
-throwerr(Format,Args) :-
-        warn(Format,Args),
-        halt(1).
-
 warn(Format,Args) :-
-        format(user_error, Format, Args).
+        format(user_error, Format, Args),
+        format(user_error, '~n', []).
 
 print_file(File) :-
         open(File, read, Stream),
@@ -223,12 +218,6 @@ mk_primed(X,X1) :-
 mk_nl(X,X1) :-
         format_atom('~p~n', [X], X1).
 
-mk_ite_cond_atom(Id, Cond) :-
-        format_atom('cond_~p_', [Id], Cond).
-
-mk_ite_cond_var(Id, Cond) :-
-        dot([mk_var_name, mk_ite_cond_atom], Id, Cond).
-
 mk_ite(Cond,Then,Else,Res) :-
         format_atom('ite(~p, ~p, ~p)', [Cond, Then, Else], Res).
 
@@ -256,3 +245,8 @@ fold(_,_,T,_) :-
         throwerr('~n!!! fold for ~p is not yet implemented !!!~n', [T]).
 
 flip(A,F,R) :- call(F,A,R).
+
+throwerr(Format,Args) :-
+        warn(Format,Args),
+        false.
+        % halt(1).
