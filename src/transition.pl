@@ -13,7 +13,9 @@ mk_next(Res) :-
         mk_next_helper_predicates(Helper),
 	mk_next_def(Hd),
 
-        ir_toplevel_list(TLPs),
+        ir_toplevel_list(_TLPs),
+        SkippedToplevels = [register, wire, taint_source, link],
+        exclude(contains(SkippedToplevels), _TLPs, TLPs),
         maplist(dot([transition:mk_next_sep, transition:mk_next_toplevel]), TLPs, Rs),
         mk_and(Rs,RsAnd),
 
@@ -26,10 +28,6 @@ mk_next_toplevel(always, Res)        :- !, mk_next_always(Res).
 mk_next_toplevel(module_inst, Res)   :- !, mk_next_module_inst(Res).
 mk_next_toplevel(taint_sink, Res)    :- !, mk_next_sink_cond(Res).
 mk_next_toplevel(asn, Res)           :- !, mk_next_asn(Res).
-mk_next_toplevel(link, true)         :- !.
-mk_next_toplevel(taint_source, true) :- !.
-mk_next_toplevel(register, true)     :- !.
-mk_next_toplevel(wire, true)         :- !.
 mk_next_toplevel(TLP, _) :-
         throwerr('mk_next_toplevel for ~p is not yet implemented !', [TLP]).
 
@@ -57,7 +55,8 @@ mk_next_sink_cond(Res) :-
         ( ir:taint_sink(_Sink) -> 
             mk_tagvar_name(_Sink, Sink), mk_primed(Sink,Sink1),
             done_var(Done), mk_primed(Done,Done1),
-            format_atom('ite(~p >= 1, ~p = 1, ~p = ~p)',[Sink1, Done1, Done1, Done], Res)
+            inline_comment('sink statement', Comment),
+            format_atom('~p ite(~p >= 1, ~p = 1, ~p = ~p)',[Comment, Sink1, Done1, Done1, Done], Res)
         ; throwerr('no taink_sink predicate !', [])
         ).
 
@@ -74,7 +73,9 @@ mk_next_asn(Res) :-
         do  mk_next_assign_op(Lhs,Rhs,_R),
             mk_next_sep(_R,R)
         ),
-        mk_and(Rs,Res).
+        mk_and(Rs,Res1),
+        inline_comment('assign statements', C),
+        format_atom('~p ~p', [C, Res1], Res).
         
 
 %% generate the TR for the statements inside the always blocks
@@ -87,7 +88,9 @@ mk_next_always(Res) :-
             mk_next_sep(_StmtRes, StmtRes)
         ),
         maplist(mk_next_sep,AllStmtRes,_Res),
-        mk_and(_Res,Res).
+        mk_and(_Res,Res1),
+        inline_comment('always blocks', C),
+        format_atom('~p ~p', [C, Res1], Res).
 
 %% generate the TR for the statement of the format Type(Args...)
 mk_next_stmt(Stmt,Res) :-
@@ -136,7 +139,9 @@ mk_next_module_inst(Res) :-
         query_ir(module_inst, Modules),
         maplist(mk_next_module_helper, Modules, Ms),
         maplist(mk_next_sep, Ms, Ms2),
-        mk_and(Ms2,Res).
+        mk_and(Ms2,Res1),
+        inline_comment('module instantiations', C),
+        format_atom('~p ~p', [C, Res1], Res).
 
 %% just updates the tags to the sum of the inputs
 mk_next_module_helper(_Name-Inputs-Outputs,Res) :-
@@ -154,9 +159,16 @@ mk_next_module_helper(_Name-Inputs-Outputs,Res) :-
 mk_next_assign_op(L,R,Res) :-
         !,
         (   is_uf(R) ->
-            missing_atom(R, Res)
+            ir:link(R,Atoms),
+            (   Atoms = [] ->
+                missing_atom(R, Res)
+            ;   maplist(mk_tagvar_name, Atoms, TagVars),
+                mk_tagvarprimed_name(L, LTagVar1),
+                mk_sum(TagVars, TagSum),
+                format_atom('~p = ~p', [LTagVar1, TagSum], Res)
+            )
         ;   R = const_expr ->
-            Res = true
+            missing_atom(R, Res)
         ;   atom(R) ->
             mk_var_name(L,LV), mk_primed(LV,LV1),
             mk_var_name(R,RV),
@@ -164,7 +176,7 @@ mk_next_assign_op(L,R,Res) :-
             mk_tagvar_name(R,RT),
             format_atom('assign_op(~p, ~p, ~p, ~p)', [LT1, RT, LV1, RV], Res)
         ;   number(R) ->
-            Res = true
+            missing_atom(R,Res)
         ;   otherwise ->
             throwerr('cannot assign ~p to ~p', [R, L])
         ).

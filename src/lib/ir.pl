@@ -70,7 +70,8 @@ ir_stmt([
         ]).
 
 ir_toplevel_list([
-                  register, wire, module_inst, always,
+                  register, wire,
+                  module_inst, always,
                   link, asn,
                   taint_source, taint_sink
                  ]).

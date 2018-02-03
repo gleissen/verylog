@@ -16,20 +16,26 @@ Creates Horn clause verification conditions from a intermediate language verilog
 :- use_module('vcgen.pl').
 
 mk_output_file(Res) :-
-        Res0 = '',
-        % Res1 = '',
-        Res2 = '',
+        Print_query_naming = false,
+        Print_trans_rel    = true,
+        Print_vcs          = false,
         
-	% mk_query_naming(Naming),
-        % format_atom('~p', [Naming], Res0),
+        (   Print_query_naming -> 
+            mk_query_naming(QNaming)
+        ;   QNaming = ''
+        ),
 
-	mk_next(Next),
-        format_atom('~p', [Next], Res1),
+        (   Print_trans_rel ->
+            mk_next(Next)
+        ;   Next = ''
+        ),
 
-	% mk_vcs(Vcs),
-        % format_atom('~p', [Vcs], Res2),
+        (   Print_vcs ->
+            mk_vcs(Vcs)
+        ;   Vcs = ''
+        ),
 
-        format_atom('~n~n~p~n~n~p~n~n~p', [Res0, Res1, Res2], Res),
+        format_atom('~n~n~p~n~n~p~n~n~p', [QNaming, Next, Vcs], Res),
         true.
 	
 main :-
