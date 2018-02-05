@@ -40,7 +40,7 @@ link(OutputName, InputVars)
 :- multifile register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1.
 :- dynamic   register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1.
 
-:- dynamic cond_vars/1, ite/4.
+:- dynamic cond_atom/1, ite/4.
 
 wipe_db :-
         retractall(register(_)),
@@ -52,8 +52,7 @@ wipe_db :-
         retractall(taint_sink(_)),
         retractall(taint_source(_)),
 
-        retractall(cond_vars(_)),
-        retractall(ite(_,_,_,_)),
+        retractall(cond_atom(_)),
 
         true.
 

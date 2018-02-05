@@ -16,9 +16,9 @@ Creates Horn clause verification conditions from a intermediate language verilog
 :- use_module('vcgen.pl').
 
 mk_output_file(Res) :-
-        Print_query_naming = false,
+        Print_query_naming = true,
         Print_trans_rel    = true,
-        Print_vcs          = false,
+        Print_vcs          = true,
         
         (   Print_query_naming -> 
             mk_query_naming(QNaming)

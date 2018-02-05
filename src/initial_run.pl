@@ -37,7 +37,7 @@ run_initial_toplevels(TL,P,_) :-
 run_initial_stmt(ite,[Cond,Then,Else], _) :-
         !,
         ( \+ atom(Cond) -> throwerr('condition of ite(~p, ~p, ~p) is not an atom', [Cond,Then,Else])
-        ; true
+        ; save(cond_atom(Cond))
         ),
         (   compound(Then) ->
             Then =.. [TypeThen|ArgThen],

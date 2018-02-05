@@ -31,7 +31,7 @@ verylog options:
 parser options:
   -M <toplevel module name>
       When the verilog file contains multiple modules, this is used to denote the toplevel one"
-    exit 1
+    [[ -n "$HELP" ]] && exit 0 || exit 1
 fi
 
 FILENAME="${@[-1]}"
@@ -98,6 +98,8 @@ print_IR() {
 :- discontiguous register/1, wire/1, asn/2, module_inst/3.
 
 EOF
+    
+    pushd ${FILENAME:A:h}
 
     $IVLPP $FILENAME 1>$PREPROCESSED_FILE && \
         $IVL $@ -O >(cat) $PREPROCESSED_FILE &>$LOGFILE && \
@@ -115,6 +117,8 @@ EOF
         echo "[PARSER ERROR]" 1>&2
         exit 1
     fi
+    
+    popd
 
     rm -f "$LOGFILE" "$PREPROCESSED_FILE"
 }

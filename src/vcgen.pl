@@ -12,7 +12,7 @@
 mk_vcs(Res) :-
         mk_vcs_init(InvInit),
         mk_vcs_main(InvMain),
-        format_atom('~p ~n~n~p', [InvInit, InvMain], Res).
+        format_atom('~p~n~n~p', [InvInit, InvMain], Res).
 
 mk_vcs_init(Res) :-
 	mk_vcs_vars(VcsVars),
@@ -62,9 +62,7 @@ mk_vcs_init(Res) :-
         flatten([TVRes1, TVRes2, TVRes3, TVRes4], _VsBody),
         mk_and(_VsBody, VsBody),
 
-        mk_property(Prop),
-
-	format_atom('inv(~p) :- ~p.~n~n~p', [VsArgs, VsBody, Prop], Res).
+	format_atom('inv(~p) :- ~p.', [VsArgs, VsBody], Res).
 
 mk_vcs_main(Res) :-
 	mk_vcs_vars(_VcsVars),
@@ -75,8 +73,10 @@ mk_vcs_main(Res) :-
         mk_vcs_main_next_step(ResNextStep),
         mk_vcs_main_given_inv(ResInv),
 
-	format_atom('inv(~p) :- ~n(~n~p~n;~n~p~n),~n~p.',
-                    [VcsArgs, ResNewBit, ResNextStep, ResInv],
+        mk_property(Prop),
+
+	format_atom('inv(~p) :- ~n(~n~p~n;~n~p~n),~n~p.~n~n~p',
+                    [VcsArgs, ResNewBit, ResNextStep, ResInv, Prop],
                     Res
                    ).
 
@@ -127,9 +127,7 @@ mk_vcs_main_next_step(Res) :-
         mk_next_vars(RightVars,NextVarsRight),
         mk_and(NextVarsRight, NextVarsRightAnd),
 
-        %% TODO: fix this hack
-        %% get_cond_vars(CondVars),
-        findall(C, ir:ite(_Id,C,_Then,_Else), CondAtoms),
+        findall(C, ir:cond_atom(C), CondAtoms),
         maplist(mk_var_name,CondAtoms,CondVars),
         (   foreach(CV, CondVars),
             foreach(CE, CES),
