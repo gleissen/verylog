@@ -5,30 +5,57 @@ CONF_FILE=$THIS_DIR/configuration.sh
 
 source $CONF_FILE
 
+function blue()  { print -P "%F{blue}%B$1%b%f" }
+function green() { print -P "%F{green}%B$1%b%f" }
+function red()   { print -P "%F{red}%B$1%b%f" }
+
 typeset -A TESTS
-TESTS=( "01: stall hand"    "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
-        "02: mips fragment" "-M mips_pipeline $IVL_DIR/benchmarks/472-mips-pipelined/472-mips-fragment.v" \
+TESTS=( "01. stall hand"    "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v" \
+        "02. mips fragment" "-M mips_pipeline $IVL_DIR/benchmarks/472-mips-pipelined/472-mips-fragment.v" \
       )
 
 echo
 
-for test_name in ${(k)TESTS}; do
-    echo "================================================================================"
-    echo "   RUNNING $test_name"
-    echo "================================================================================"
+TEST_PL="$THIS_DIR/src/test/unittest.pl"
+
+blue "================================================================================"
+blue "   RUNNING UNIT TESTS"
+blue "================================================================================"
+
+sicstus \
+    -f --nologo --noinfo \
+    -l "$TEST_PL" \
+    --goal "(unit_test, halt) ; halt(1)." 2>&1 | \
+    awk '{ print $0; } /tests? failed/ {failed = 1;} END {if(failed) {exit 1;} else {exit 0;}}'
+
+last_err=$?
+
+if [[ $last_err -ne 0 ]]; then
+    echo
+    red "================================================================================"
+    red "   UNIT TESTS FAILED !" 1>&2
+    red "================================================================================"
+    exit 1
+fi
+
+for test_name in ${(ok)TESTS}; do
+    blue "================================================================================"
+    blue "   RUNNING $test_name"
+    blue "================================================================================"
 
     test_input="${TESTS[$test_name]}"
     local -a test_arr
     test_arr=("${(@s/ /)test_input}")
     
     if ! $THIS_DIR/verylog ${test_arr}; then
-        echo "TEST '$test_name' FAILED !" 1>&2
+        echo
+        red "   TEST '$test_name' FAILED !" 1>&2
         exit 1
     else
         echo "\n"
     fi
 done
 
-echo "================================================================================"
-echo "   ALL TESTS PASSED"
-echo "================================================================================"
+green "================================================================================"
+green "   ALL TESTS PASSED !"
+green "================================================================================"

@@ -14,7 +14,8 @@
                mk_vcs_vars/1,
                mk_next_vars/1,
                mk_next_vars/2,
-               is_uf/1
+               is_uf/1,
+               consult_list/1
               ], [hidden(true)]).
 
 :- use_module(library(lists)).
@@ -141,3 +142,8 @@ mk_next_vars(Vars,Vs) :-
         
 is_uf(Atom) :-
         atom(Atom), link(Atom, _).
+
+consult_list(ToplevelIRList) :-
+        (   foreach(ToplevelIR, ToplevelIRList)
+        do  assert(ToplevelIR)
+        ).
