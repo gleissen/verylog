@@ -2,7 +2,13 @@
 %% ### TRANSITION RELATION #####################################################
 %% #############################################################################
 
-:- module(transition, [mk_next/1], [hidden(true)]).
+:- module(transition,
+          [
+           mk_next/1,
+           mk_next_def/1,
+           mk_next_body/1
+          ],
+          [hidden(true)]).
 
 :- use_module(library(lists)).
 
@@ -12,7 +18,28 @@
 mk_next(Res) :-
         mk_next_helper_predicates(Helper),
 	mk_next_def(Hd),
+        mk_next_body(Body),
 
+	format_atom('~p~n~p :=~n~p.', [Helper, Hd, Body], Res).
+
+mk_next_helper_predicates(Res) :-
+        HelperPredicates = [ mk_next_helper_assign_op ],
+        (   foreach(P, HelperPredicates),
+            foreach(R, Rs),
+            param(Rs)
+        do  call(P,_R),
+            format_atom('~p~n', [_R], R)
+        ),
+        mk_and(Rs,Res).
+
+%% generate the header for the transition relation definition
+%% i.e. next(...)
+mk_next_def(Res) :-
+	mk_next_vars(Vs),
+	mk_and(Vs,VsAnd),
+	format_atom('next(~p)', [VsAnd], Res).
+
+mk_next_body(Res) :-
         ir_toplevel_list(_TLPs),
         SkippedToplevels = [register, wire, taint_source, link],
         exclude(contains(SkippedToplevels), _TLPs, TLPs),
@@ -22,8 +49,8 @@ mk_next(Res) :-
         mk_next_incr(_Incr),
         mk_next_sep(_Incr,Incr),
 
-	format_atom('~p~p :=~n(~p,~p~n).', [Helper, Hd, RsAnd, Incr], Res).
-
+        format_atom('(~p,~p~n)', [RsAnd, Incr], Res).
+        
 mk_next_toplevel(always, Res)        :- !, mk_next_always(Res).
 mk_next_toplevel(module_inst, Res)   :- !, mk_next_module_inst(Res).
 mk_next_toplevel(taint_sink, Res)    :- !, mk_next_sink_cond(Res).
@@ -31,23 +58,6 @@ mk_next_toplevel(asn, Res)           :- !, mk_next_asn(Res).
 mk_next_toplevel(TLP, _) :-
         throwerr('mk_next_toplevel for ~p is not yet implemented !', [TLP]).
 
-mk_next_helper_predicates(Res) :-
-        HelperPredicates = [ mk_next_helper_assign_op ],
-        (   foreach(P, HelperPredicates),
-            foreach(R, Rs),
-            param(Rs)
-        do  call(P,_R),
-            format_atom('~p~n~n', [_R], R)
-        ),
-        mk_and(Rs,Res).
-        
-
-%% generate the header for the transition relation definition
-%% i.e. next(...)
-mk_next_def(Res) :-
-	mk_next_vars(Vs),
-	mk_and(Vs,VsAnd),
-	format_atom('next(~p)', [VsAnd], Res).
 
 %% update done if sink's tag > 0
 %% ite(sink_t >= 1, Done1 = 1, Done1 = Done)

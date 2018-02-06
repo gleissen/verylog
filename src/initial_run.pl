@@ -28,8 +28,17 @@ run_initial_toplevels(asn,_Lhs-_Rhs,_) :- !.
 
 run_initial_toplevels(register,_,_) :- !.
 run_initial_toplevels(wire,_,_) :- !.
-run_initial_toplevels(taint_source,_,_) :- !.
-run_initial_toplevels(taint_sink,_,_) :- !.
+run_initial_toplevels(taint_source,Source,_) :- !,
+        (   \+ ir:register(Source) -> 
+            throwerr('source register ~p does not exist', [Source])
+        ; true
+        ).
+        
+run_initial_toplevels(taint_sink,Sink,_) :- !,
+        (   \+ ir:register(Sink) -> 
+            throwerr('sink register ~p does not exist', [Sink])
+        ; true
+        ).
 
 run_initial_toplevels(TL,P,_) :-
         throwerr('run_initial_toplevels is not yet implemented for ~p as in ~p~n', [TL,P]).

@@ -144,6 +144,7 @@ is_uf(Atom) :-
         atom(Atom), link(Atom, _).
 
 consult_list(ToplevelIRList) :-
+        wipe_db,
         (   foreach(ToplevelIR, ToplevelIRList)
         do  assert(ToplevelIR)
         ).
