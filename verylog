@@ -13,6 +13,7 @@ MAIN_PL="src/${MAIN_MODULE}.pl"
 zparseopts -D -E -- \
            -no-interpreter=NO_INTERPRETER -just-ir=JUST_IR -just-vcgen=JUST_VCGEN \
            M:=TOPLEVEL_MODULE \
+           -plot=PLOT \
            h=HELP -help=HELP
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
@@ -108,7 +109,6 @@ EOF
         sed -n 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $this_filename
     
     last_err=$?
-    pwd 1>&2
 
     if [[ $last_err -ne 0 ]]; then
         if [[ -f "$LOGFILE" && "$(wc -l $LOGFILE | cut -d' ' -f1)" -gt 0 ]]; then
@@ -130,6 +130,29 @@ print_IR $TOPLEVEL_MODULE > $IR_FILE
 
 if [[ -n "$JUST_IR" ]]; then
     cat $IR_FILE
+    exit 0
+fi
+
+if [[ -n "$PLOT" ]]; then
+    dot_file=/tmp/${FILENAME:t:r}.dot
+    png_file=/tmp/${FILENAME:t:r}.png
+
+    sicstus \
+        -f --noinfo --nologo \
+        -l "${THIS_DIR}/src/plot.pl" \
+        --goal "(main -> halt; halt(1))." \
+        -- $IR_FILE > $dot_file
+
+    last_err=$?
+
+    if [[ $last_err -ne 0 ]]; then
+        exit 1 
+    fi
+    
+    [[ -f $dot_file ]] && dot -Tpng $dot_file -o $png_file || exit 1
+
+    [[ -f $png_file ]] && xdg-open $png_file &>/dev/null || exit 1
+
     exit 0
 fi
 

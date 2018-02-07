@@ -10,7 +10,7 @@ Creates Horn clause verification conditions from a intermediate language verilog
 :- use_module('lib/misc.pl').
 :- use_module('lib/ir.pl').
 
-:- use_module('initial_run.pl').
+:- use_module('initial_pass.pl').
 :- use_module('query_naming.pl').
 :- use_module('transition.pl').
 :- use_module('vcgen.pl').
@@ -41,10 +41,8 @@ mk_output_file(Res) :-
 main :-
         prolog_flag(argv, [Input|_]),
         read_ir(Input),
-        runInput.
-
-runInput :-
         run_initial_pass,
 	mk_output_file(Res),
-	format('~p',[Res]).
+	format('~p',[Res]),
+        true.
         

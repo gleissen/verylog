@@ -62,12 +62,12 @@ mk_next_toplevel(TLP, _) :-
 %% update done if sink's tag > 0
 %% ite(sink_t >= 1, Done1 = 1, Done1 = Done)
 mk_next_sink_cond(Res) :-
-        ( ir:taint_sink(_Sink) -> 
+        (   ir:taint_sink(_Sink) -> 
             mk_var_name([tag, prime], _Sink, Sink1),
             mk_done_var([], Done), mk_done_var([prime], Done1),
             inline_comment('sink statement', Comment),
             format_atom('~p ite(~p >= 1, ~p = 1, ~p = ~p)',[Comment, Sink1, Done1, Done1, Done], Res)
-        ; throwerr('no taink_sink predicate !', [])
+        ;   throwerr('no taink_sink predicate !', [])
         ).
 
 %% generates the line for 'Done = 0'
@@ -80,7 +80,7 @@ mk_next_asn(Res) :-
         (   foreach(Lhs-Rhs, Asns),
             foreach(R, Rs),
             param(Rs)
-        do  mk_next_assign_op(Lhs,Rhs,_R),
+        do  mk_next_assign([assign],Lhs,Rhs,_R),
             mk_next_sep(_R,R)
         ),
         mk_and(Rs,Res1),
@@ -114,10 +114,10 @@ mk_next_stmt(Stmt,Res) :-
 
 %% generate the TR for process a non-blocking assignment
 mk_next_stmt(nb_asn, [L,R], Res) :-
-        !, mk_next_assign_op(L,R,Res).
+        !, mk_next_assign([nonblocking],L,R,Res).
 
 mk_next_stmt(b_asn, [L,R], Res) :-
-        !, mk_next_assign_op(L,R,Res).
+        !, mk_next_assign([blocking],L,R,Res).
 
 %% generate the TR for an if statement
 mk_next_stmt(ite, [Cond, Then, Else], Res) :-
@@ -166,27 +166,42 @@ mk_next_module_helper(_Name-Inputs-Outputs,Res) :-
         ),
         mk_and(Rs,Res).
 
-mk_next_assign_op(L,R,Res) :-
-        !,
-        (   is_uf(R) ->
-            ir:link(R,Atoms),
-            (   Atoms = [] ->
-                missing_atom(R, Res)
-            ;   maplist(mk_var_name([tag]), Atoms, TagVars),
-                mk_var_name([tag,prime], L, LTagVar1),
-                mk_sum(TagVars, TagSum),
-                format_atom('~p = ~p', [LTagVar1, TagSum], Res)
-            )
-        ;   atom(R) ->
-            mk_var_name([prime],L,LV1),
-            mk_var_name(R,RV),
-            mk_var_name([tag,prime], L,LT1),
-            mk_var_name([tag], R,RT),
-            format_atom('assign_op(~p, ~p, ~p, ~p)', [LT1, RT, LV1, RV], Res)
-        ;   number(R) ->
-            missing_atom(R,Res)
+mk_next_assign(Options,L,R,Res) :- !,
+        ( is_uf(R)  -> mk_next_assign_uf(Options,L,R,Res)
+        ; atom(R)   -> mk_next_assign_var(Options,L,R,Res)
+        ; otherwise -> throwerr('cannot assign ~p to ~p', [R, L])
+        ).
+
+mk_next_assign_uf(Options,L,R,Res) :-
+        (   memberchk(assign, Options) ->
+            throwerr('assign ~p = ~p : result of an UF is used in cont. assignment!', [L,R])
+        ;   true
+        ),                      % sanity check
+        ir:link(R,Atoms),
+        (   Atoms = [] ->
+            missing_atom(R, Res)
+
+        ;   maplist(mk_var_name([tag]), Atoms, TagVars),
+            mk_var_name([tag,prime], L, LTagVar1),
+            mk_sum(TagVars, TagSum),
+            format_atom('~p = ~p', [LTagVar1, TagSum], Res)
+        ).
+        
+mk_next_assign_var(Options,L,R,Res) :-
+        mk_var_name([prime],L,VL1),
+        mk_var_name([tag,prime],L,VLT1),
+        mk_var_name(R,VR),
+        mk_var_name([tag],R,VRT),
+        (   memberchk(assign, Options) ->
+            %% VL = VR, VL1 = VR1, VLT = VRT, VLT1 = VRT1
+            mk_var_name(L,VL),
+            mk_var_name([prime],R,VR1),
+            mk_var_name([tag],L,VLT),
+            mk_var_name([tag,prime],R,VRT1),
+            format_atom('~p = ~p, ~p = ~p, ~p = ~p, ~p = ~p', [VL, VR, VL1, VR1, VLT, VRT, VLT1, VRT1], Res)
         ;   otherwise ->
-            throwerr('cannot assign ~p to ~p', [R, L])
+            %% VLT1 = VRT, VL1 = VR
+            format_atom('assign_op(~p, ~p, ~p, ~p)', [VLT1, VRT, VL1, VR], Res)
         ).
 
 mk_next_helper_assign_op(Res) :-

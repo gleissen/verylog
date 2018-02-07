@@ -214,7 +214,9 @@ fold(_,_,T,_) :-
 
 flip(A,F,R) :- call(F,A,R).
 
+
 throwerr(Format,Args) :-
-        warn(Format,Args),
+        warn(Format, Args),
+        % true.
         false.
         % halt(1).

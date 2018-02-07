@@ -4,7 +4,7 @@
 :- use_module('../lib/misc.pl').
 :- use_module('../lib/ir.pl').
 
-:- use_module('../initial_run.pl').
+:- use_module('../initial_pass.pl').
 :- use_module('../query_naming.pl').
 :- use_module('../transition.pl').
 :- use_module('../vcgen.pl').
