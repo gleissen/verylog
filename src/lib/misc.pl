@@ -1,43 +1,35 @@
 /* This module contains various utility predicates */
 
 :- module(misc, [
+		 copy_instantiate/4,
+		 format_atom/3,
 		 fresh_pred_sym/1,
+		 get_fresh_num/1,
+		 get_ord_pairs/2,
+		 get_pairs/2,
 		 mk_and/2,
 		 mk_and/3,
-		 get_fresh_num/1,
+		 negate/2, bb_inc/1,
 		 reset_fresh_num/0,
-		 get_pairs/2,
-		 get_ord_pairs/2,
+		 reset_pred_sym/0,
 		 substitute_term/4,
 		 substitute_term_avl/4,
-		 format_atom/3,
-		 copy_instantiate/4,
-		 negate/2, bb_inc/1,
-		 reset_pred_sym/0,
-                 droplist/3,
-                 mk_sum/2,
-                 flatten/2,
-                 contains/2,
-                 throwerr/2,
-                 warn/2,
-                 print_file/1,
-                 add_suffix/3,
                  add_prefix/3,
-                 mk_var_name/2,
-                 mk_lhs_name/2,
-                 mk_rhs_name/2,
-                 mk_tag_name/2,
-                 mk_tagvar_name/2,
-                 mk_tagvarprimed_name/2,
-                 mk_atom_name/2,
-                 mk_primed/2,
-                 mk_nl/2,
-                 mk_ite/4,
-                 missing_atom/2,
-                 inline_comment/2,
+                 add_suffix/3,
+                 contains/2,
                  dot/3,
+                 droplist/3,
+                 flatten/2,
+                 flip/3,
                  fold/4,
-                 flip/3
+                 inline_comment/2,
+                 missing_atom/2,
+                 mk_ite/4,
+                 mk_nl/2,
+                 mk_sum/2,
+                 print_file/1,
+                 throwerr/2,
+                 warn/2
 		], [hidden(true)]).
 :- use_module(library(codesio)).
 :- use_module(library(ordsets)).
@@ -49,10 +41,10 @@ mk_and(L,R) :- rev(L, L1), mk_and_(L1, R).
 
 mk_and_([], true).
 mk_and_([H|T], R) :-
-	foreach(X, T),
-	fromto(H, In, Out, R)
-	do
-	mk_and(X, In, Out).
+        foreach(X, T),
+        fromto(H, In, Out, R)
+        do
+        mk_and(X, In, Out).
 
 mk_and(true,  R,     R)     :- !.
 mk_and(false, _,     false) :- !.
@@ -190,30 +182,6 @@ add_suffix(S,X,X1) :-
 
 add_prefix(P,X,X1) :-
         format_atom('~p~p', [P,X], X1).
-
-mk_var_name(ID, VarName) :-
-        add_prefix('V_', ID, VarName).
-
-mk_lhs_name(ID, VarName) :-
-        add_suffix('L', ID, VarName).
-
-mk_rhs_name(ID, VarName) :-
-        add_suffix('R', ID, VarName).
-
-mk_tag_name(ID, VarName) :-
-        add_suffix('_t', ID, VarName).
-
-mk_tagvar_name(ID, TagVarName) :-
-        dot([mk_var_name, mk_tag_name], ID, TagVarName).
-
-mk_tagvarprimed_name(ID, TagVarName) :-
-        dot([mk_primed, mk_var_name, mk_tag_name], ID, TagVarName).
-
-mk_atom_name(ID, AtomName) :-
-        add_prefix('v_', ID, AtomName).
-
-mk_primed(X,X1) :-
-        add_suffix('1', X, X1).
 
 mk_nl(X,X1) :-
         format_atom('~p~n', [X], X1).

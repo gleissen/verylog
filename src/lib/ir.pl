@@ -1,21 +1,21 @@
 :- module(ir, [
-               read_ir/0,
-               read_ir/1,
-               query_ir/2,
+               consult_list/1,
+               get_all_vars/2,
                ir_stmt/1,
                ir_toplevel_list/1,
-               done_var/1,
+               is_uf/1,
                done_atom/1,
-               get_reg_vars/1,
-               get_tag_vars/1,
-               get_other_vars/1,
-               get_all_vars/1,
-               save/1,
-               mk_vcs_vars/1,
+               mk_done_var/2,
                mk_next_vars/1,
                mk_next_vars/2,
-               is_uf/1,
-               consult_list/1
+               mk_var_name/2,
+               mk_var_name/3,
+               mk_vcs_vars/1,
+               mk_vcs_vars/2,
+               query_ir/2,
+               read_ir/0,
+               read_ir/1,
+               save/1
               ], [hidden(true)]).
 
 :- use_module(library(lists)).
@@ -92,9 +92,6 @@ query_ir(P, Ls) :-
         ; Ls=[]
         ).
 
-done_var('Done').
-done_atom('done').
-
 read_ir(File) :-
         wipe_db,
         consult(File).
@@ -104,42 +101,44 @@ read_ir :-
         read_ir(F).
 
 
-get_reg_vars(VsRegVars) :-
+get_reg_vars(Options, VsRegVars) :-
         query_ir(register,VsRegs),
-        maplist(mk_var_name,VsRegs,VsRegVars).
+        maplist(mk_var_name(Options),VsRegs,VsRegVars).
 
-get_tag_vars(VsTagVars) :-
+get_tag_vars(Options, VsTagVars) :-
         query_ir(register,VsRegs),
-        maplist(mk_tagvar_name,VsRegs,VsTagVars).
+        maplist(mk_var_name([tag|Options]),VsRegs,VsTagVars).
 
-get_other_vars([Done|UFVars]) :-
-        done_var(Done),
+get_other_vars(Options, OtherVars) :-
+        done_atom(DoneAtom),
         findall(X, link(X,_), UFAtoms),
-        maplist(mk_var_name, UFAtoms, UFVars).
+        maplist(mk_var_name(Options), [DoneAtom|UFAtoms], OtherVars).
 
-get_all_vars(VsAllVars) :-
-        get_reg_vars(VsRegVars),
-        get_tag_vars(VsTagVars),
-        get_other_vars(VsOtherVars),
+get_all_vars(Options, VsAllVars) :-
+        get_reg_vars(Options, VsRegVars),
+        get_tag_vars(Options, VsTagVars),
+        get_other_vars(Options, VsOtherVars),
         flatten([VsRegVars,VsTagVars,VsOtherVars], VsAllVars).
+
+get_all_vars(AllVars) :- get_all_vars([], AllVars).
 
 test_file('$HOME/work/verilog/iverilog-parser/benchmarks/472-mips-pipelined/.472-mips-fragment.pl').
 
-
 mk_vcs_vars(Vs) :-
-        get_all_vars(AllVars),
-        maplist(mk_lhs_name, AllVars, LeftVars),
-        maplist(mk_rhs_name, AllVars, RightVars),
-        append(LeftVars,RightVars,Vs).
+        mk_vcs_vars([], Vs).
 
-mk_next_vars(Vs) :-
-        get_all_vars(Vars),
-        mk_next_vars(Vars,Vs).
+mk_vcs_vars(Options, Vs) :-
+        get_all_vars([left|Options],  LeftVars),
+        get_all_vars([right|Options], RightVars),
+        append(LeftVars, RightVars, Vs).
 
-mk_next_vars(Vars,Vs) :-
-        maplist(mk_primed, Vars, Vars1),
-        append(Vars,Vars1,Vs).
-        
+mk_next_vars(Vs) :- mk_next_vars([], Vs).
+
+mk_next_vars(Options, Vs) :-
+        get_all_vars(Options, Vars),
+        get_all_vars([prime|Options], PrimedVars),
+        append(Vars,PrimedVars,Vs).
+
 is_uf(Atom) :-
         atom(Atom), link(Atom, _).
 
@@ -148,3 +147,46 @@ consult_list(ToplevelIRList) :-
         (   foreach(ToplevelIR, ToplevelIRList)
         do  assert(ToplevelIR)
         ).
+
+%% VLT1_...
+
+mk_var_name(ID, VarName) :-
+        mk_var_name([], ID, VarName).
+
+%% options are: left, right, tag, prime
+mk_var_name(Options, ID, VarName) :-
+        parse_options(Options, Suffix),
+        add_prefix(Suffix, ID, VarName).
+
+parse_options(Options, Suffix) :-
+        (   memberchk(left, Options), memberchk(right, Options) ->
+            throwerr('mk_var_name is given both left & right')
+        ;   memberchk(left, Options) ->
+            Pos = 'L'
+        ;   memberchk(right, Options) ->
+            Pos = 'R'
+        ;   otherwise ->
+            Pos = ''
+        ),
+        (   memberchk(tag, Options) ->
+            Tag = 'T'
+        ;   otherwise ->
+            Tag = ''
+        ),
+        (   memberchk(prime, Options) ->
+            Prime = '1'
+        ;   otherwise ->
+            Prime = ''
+        ),
+        (   memberchk(atom, Options) ->
+            Atom = 'v'
+        ;   otherwise ->
+            Atom = ''
+        ),
+        format_atom('~pV~p~p~p_', [Atom, Pos, Tag, Prime], Suffix).
+
+done_atom('done').
+
+mk_done_var(Options, VarName) :-
+        done_atom(DoneAtom),
+        mk_var_name(Options, DoneAtom, VarName).

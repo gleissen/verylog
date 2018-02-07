@@ -19,44 +19,44 @@ mk_vcs_init(Res) :-
 	mk_and(VcsVars,VsArgs),
 
         query_ir(taint_source, Sources),
-        maplist(mk_tagvar_name, Sources, SourceTagVars),
-        (   foreach(TV1, SourceTagVars),
+        (   foreach(S, Sources),
             foreach(R1, TVRes1),
             param(TVRes1)
-        do  mk_lhs_name(TV1, TVL1),
-            mk_rhs_name(TV1, TVR1),
+        do  mk_var_name([tag, left],  S, TVL1),
+            mk_var_name([tag, right], S, TVR1),
             format_atom('~p = 1, ~p = 1', [TVL1, TVR1], _R1),
             mk_vc_sep(_R1,R1)
         ),
 
-        get_tag_vars(TagVars),
-        exclude(contains(SourceTagVars), TagVars, RestVars),
-        (   foreach(TV2, RestVars),
+        findall(R, ir:register(R), Regs),
+        exclude(contains(Sources), Regs, RestRegs),
+        (   foreach(Reg, RestRegs),
             foreach(R2,  TVRes2),
             param(TVRes2)
-        do  mk_lhs_name(TV2, TVL2),
-            mk_rhs_name(TV2, TVR2),
+        do  mk_var_name([tag, left],  Reg, TVL2),
+            mk_var_name([tag, right], Reg, TVR2),
             format_atom('~p = 0, ~p = 0', [TVL2, TVR2], _R2),
             mk_vc_sep(_R2,R2)
         ),
 
-        get_other_vars(OtherVars),
-        (   foreach(TV3, OtherVars),
+        done_atom(DoneAtom),
+        findall(X, ir:link(X,_), UFAtoms),
+        (   foreach(A, [DoneAtom|UFAtoms]),
             foreach(R3,  TVRes3),
             param(TVRes3)
-        do  mk_lhs_name(TV3, TVL3),
-            mk_rhs_name(TV3, TVR3),
+        do  mk_var_name([tag, left],  A, TVL3),
+            mk_var_name([tag, right], A, TVR3),
             format_atom('~p = 0, ~p = 0', [TVL3, TVR3], _R3),
             mk_vc_sep(_R3,R3)
         ),
 
-        (   foreach(S, Sources),
-            foreach(R,  TVRes4),
+        (   foreach(S2, Sources),
+            foreach(R4,  TVRes4),
             param(TVRes4)
-        do  dot([mk_lhs_name, mk_var_name], S, VL),
-            dot([mk_rhs_name, mk_var_name], S, VR),
-            format_atom('~p = ~p', [VL, VR], _R),
-            mk_vc_sep(_R,R)
+        do  mk_var_name([left],  S2, VL),
+            mk_var_name([right], S2, VR),
+            format_atom('~p = ~p', [VL, VR], _R4),
+            mk_vc_sep(_R4, R4)
         ),
 
         flatten([TVRes1, TVRes2, TVRes3, TVRes4], _VsBody),
@@ -65,8 +65,7 @@ mk_vcs_init(Res) :-
 	format_atom('inv(~p) :- ~p.', [VsArgs, VsBody], Res).
 
 mk_vcs_main(Res) :-
-	mk_vcs_vars(_VcsVars),
-        maplist(mk_primed,_VcsVars,VcsVars),
+	mk_vcs_vars([prime], VcsVars),
 	mk_and(VcsVars,VcsArgs),
 
         mk_vcs_main_issue_new_bit(ResNewBit),
@@ -82,57 +81,72 @@ mk_vcs_main(Res) :-
 
 mk_vcs_main_issue_new_bit(Res) :-
         %% both executions have not finished yet
-        done_var(Done),
-        maplist(flip(Done), [mk_lhs_name,mk_rhs_name], [DoneL, DoneR]),
-        maplist(mk_primed,   [DoneL,DoneR], [DoneL1,DoneR1]),
+        %% done left&right old&new set to zero
+        mk_done_var([left],         DoneL),
+        mk_done_var([right],        DoneR),
+        mk_done_var([left, prime],  DoneL1),
+        mk_done_var([right, prime], DoneR1),
+        
         format_atom('~p = 0, ~p = 0', [DoneL, DoneL1], Line1),
         format_atom('~p = 0, ~p = 0', [DoneR, DoneR1], Line2),
 
+        findall(R, ir:register(R), Regs),
+        findall(L, ir:link(L,_), UFs),
+
         %% issue a new taint bit
-        query_ir(taint_source, Sources),
-        maplist(dot([mk_lhs_name, mk_tagvar_name]), Sources, SourceTagLeftVars),
-        maplist(dot([mk_rhs_name, mk_tagvar_name]), Sources, SourceTagRightVars),
-        append(SourceTagLeftVars, SourceTagRightVars, SourceTagVars),
-        (   foreach(STV, SourceTagVars),
+        %% new tags of source registers are set to 1
+        findall(SO, ir:taint_source(SO), Sources),
+        (   foreach(S, Sources),
             foreach(R1, Line3),
             param(Line3)
-        do  mk_primed(STV, STV1),
-            format_atom('~p = 1', [STV1], R1)
+        do  mk_var_name([left,  tag, prime], S, SVLT1),
+            mk_var_name([right, tag, prime], S, SVRT1),
+            format_atom('~p=1,~p=1', [SVLT1, SVRT1], R1)
         ),
         mk_and(Line3,Line3And),
 
-        %% all variable valuations stay the same.
-        mk_vcs_vars(VcsVars),
-        exclude(contains([DoneL,DoneR|SourceTagVars]), VcsVars, RestVars),
-        (   foreach(V, RestVars),
-            foreach(V2, Line4)
-        do  mk_primed(V,V1),
-            format_atom('~p = ~p', [V1, V], V2)
+        %% reset other taint bits
+        %% new tags of other registers are set to 0
+        exclude(contains(Sources), Regs, ResetRegs),
+        (   foreach(RR, ResetRegs),
+            foreach(R2, Line4),
+            param(Line3)
+        do  mk_var_name([left,  tag, prime], RR, RRVLT1),
+            mk_var_name([right, tag, prime], RR, RRVRT1),
+            format_atom('~p=0,~p=0', [RRVLT1, RRVRT1], R2)
         ),
         mk_and(Line4,Line4And),
         
-        format_atom('~p,~n~p,~n~p,~n~p',
-                    [Line1,Line2,Line3And,Line4And],
+        %% all variable valuations stay the same.
+        append(Regs,UFs,AllAtoms),
+        (   foreach(A, AllAtoms),
+            foreach(A2, Line5)
+        do  mk_var_name([left],  A, AL_Old),
+            mk_var_name([right], A, AR_Old),
+            mk_var_name([left,  prime], A, AL_New),
+            mk_var_name([right, prime], A, AR_New),
+            format_atom('~p=~p,~p=~p', [AL_New, AL_Old, AR_New, AR_Old], A2)
+        ),
+        mk_and(Line5,Line5And),
+        
+        format_atom('~p,~n~p,~n~p,~n~p,~n~p',
+                    [Line1,Line2,Line3And,Line4And,Line5And],
                     Res).
 
 %% both not done: both executions take a step.
 mk_vcs_main_next_step(Res) :-
-        get_all_vars(AllVars),
-
-        maplist(mk_lhs_name, AllVars, LeftVars),
-        mk_next_vars(LeftVars,NextVarsLeft),
+        mk_next_vars([left],NextVarsLeft),
         mk_and(NextVarsLeft, NextVarsLeftAnd),
 
-        maplist(mk_rhs_name, AllVars, RightVars),
-        mk_next_vars(RightVars,NextVarsRight),
+        mk_next_vars([right],NextVarsRight),
         mk_and(NextVarsRight, NextVarsRightAnd),
 
         findall(C, ir:cond_atom(C), CondAtoms),
-        maplist(mk_var_name,CondAtoms,CondVars),
-        (   foreach(CV, CondVars),
+        (   foreach(CA, CondAtoms),
             foreach(CE, CES),
             param(CES)
-        do  maplist(flip(CV), [mk_lhs_name, mk_rhs_name], [CVL, CVR]),
+        do  mk_var_name([left],  CA, CVL),
+            mk_var_name([right], CA, CVR),
             format_atom('~p = ~p', [CVL,CVR], CE)
         ),
         mk_and(CES,CondEqualities),
@@ -142,14 +156,10 @@ mk_vcs_main_next_step(Res) :-
         (   foreach(SAtom, Sources),
             foreach(SI, SIS),
             param(SIS)
-        do  mk_var_name(SAtom, SVar),
-            maplist(dot([mk_primed, flip(SVar)]),
-                    [mk_lhs_name, mk_rhs_name],
-                    [SVarL1, SVarR1]),
-            mk_tag_name(SVar, STVar),
-            maplist(dot([mk_primed, flip(STVar)]),
-                    [mk_lhs_name, mk_rhs_name],
-                    [STVarL1, STVarR1]),
+        do  mk_var_name([left,  prime],      SAtom, SVarL1),
+            mk_var_name([right, prime],      SAtom, SVarR1),
+            mk_var_name([tag, left,  prime], SAtom, STVarL1),
+            mk_var_name([tag, right, prime], SAtom, STVarR1),
             format_atom('~p = ~p, ~p = 0, ~p = 0', [SVarL1, SVarR1, STVarL1, STVarR1], SI)
         ),
         mk_and(SIS, SameInstructions),
@@ -164,8 +174,8 @@ mk_vcs_main_given_inv(Res) :-
         format_atom('inv(~p)', [VcsArgs], Res).
 
 mk_property(Res) :-
-        done_var(Done),
-        maplist(flip(Done), [mk_lhs_name, mk_rhs_name], [DoneL, DoneR]),
+        mk_done_var([left],  DoneL),
+        mk_done_var([right], DoneR),
         mk_vcs_vars(Vs),
         mk_and(Vs,VsAnd),
         format_atom('~p = 1 :-~ninv(~p), ~p = 1.', [DoneR,VsAnd, DoneL], Res).

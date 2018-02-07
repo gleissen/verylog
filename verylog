@@ -100,12 +100,15 @@ print_IR() {
 EOF
     
     pushd ${FILENAME:A:h}
+    
+    this_filename=${FILENAME:t}
 
-    $IVLPP $FILENAME 1>$PREPROCESSED_FILE && \
+    $IVLPP $this_filename 1>$PREPROCESSED_FILE && \
         $IVL $@ -O >(cat) $PREPROCESSED_FILE &>$LOGFILE && \
-        sed -n 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $FILENAME  
+        sed -n 's|^[ \t]*//[ \t]*@annot{\(.*\)}[^}]*|\1.|p' $this_filename
     
     last_err=$?
+    pwd 1>&2
 
     if [[ $last_err -ne 0 ]]; then
         if [[ -f "$LOGFILE" && "$(wc -l $LOGFILE | cut -d' ' -f1)" -gt 0 ]]; then
@@ -114,7 +117,7 @@ EOF
             echo "error while running $IVL $@ -O >(cat) $PREPROCESSED_FILE, running again ..." 1>&2
             $IVL $@ -O >(cat 1>&2) $PREPROCESSED_FILE
         fi
-        echo "[PARSER ERROR]" 1>&2
+        echo "\n[PARSER ERROR]" 1>&2
         exit 1
     fi
     

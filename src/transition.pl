@@ -63,8 +63,8 @@ mk_next_toplevel(TLP, _) :-
 %% ite(sink_t >= 1, Done1 = 1, Done1 = Done)
 mk_next_sink_cond(Res) :-
         ( ir:taint_sink(_Sink) -> 
-            mk_tagvar_name(_Sink, Sink), mk_primed(Sink,Sink1),
-            done_var(Done), mk_primed(Done,Done1),
+            mk_var_name([tag, prime], _Sink, Sink1),
+            mk_done_var([], Done), mk_done_var([prime], Done1),
             inline_comment('sink statement', Comment),
             format_atom('~p ite(~p >= 1, ~p = 1, ~p = ~p)',[Comment, Sink1, Done1, Done1, Done], Res)
         ; throwerr('no taink_sink predicate !', [])
@@ -72,7 +72,7 @@ mk_next_sink_cond(Res) :-
 
 %% generates the line for 'Done = 0'
 mk_next_incr(Res) :-
-        done_var(Done),
+        mk_done_var([], Done),
         format_atom('~p = 0', [Done], Res).
 
 mk_next_asn(Res) :-
@@ -108,19 +108,19 @@ mk_next_stmt(Stmt,Res) :-
             ( ir_stmt(L), memberchk(Type, L) -> true
             ; throwerr('~p is not a valid statement !~n', [Type])
             ),
-            mk_next_stmt_helper(Type,Args,Res)
+            mk_next_stmt(Type,Args,Res)
         ;   throwerr('~p is not a valid statement !', [Stmt])
         ).
 
 %% generate the TR for process a non-blocking assignment
-mk_next_stmt_helper(nb_asn, [L,R], Res) :-
+mk_next_stmt(nb_asn, [L,R], Res) :-
         !, mk_next_assign_op(L,R,Res).
 
-mk_next_stmt_helper(b_asn, [L,R], Res) :-
+mk_next_stmt(b_asn, [L,R], Res) :-
         !, mk_next_assign_op(L,R,Res).
 
 %% generate the TR for an if statement
-mk_next_stmt_helper(ite, [Cond, Then, Else], Res) :-
+mk_next_stmt(ite, [Cond, Then, Else], Res) :-
         !,
         mk_var_name(Cond, CondVar),
         mk_next_stmt(Then, ThenRes),
@@ -129,20 +129,20 @@ mk_next_stmt_helper(ite, [Cond, Then, Else], Res) :-
                     [CondVar, ThenRes, CondVar, ElseRes],
                     Res).
 
-mk_next_stmt_helper(block, [Stmts], Res) :-
+mk_next_stmt(block, [Stmts], Res) :-
         !,
         (   foreach(S,Stmts),
             foreach(R,Rs),
             param(Rs)
         do  S =.. [Type|Args],
-            mk_next_stmt_helper(Type,Args,R)
+            mk_next_stmt(Type,Args,R)
         ),
         mk_and(Rs,RsAnd),
         format_atom('(~p)', [RsAnd], Res).
             
 
-mk_next_stmt_helper(Type, Args, _) :-
-        throwerr('mk_next_stmt_helper for ~p(~p) is not yet implemented~n', [Type, Args]).
+mk_next_stmt(Type, Args, _) :-
+        throwerr('mk_next_stmt for ~p(~p) is not yet implemented~n', [Type, Args]).
 
 %% generate the TR for a module instantiation
 mk_next_module_inst(Res) :-
@@ -155,12 +155,12 @@ mk_next_module_inst(Res) :-
 
 %% just updates the tags to the sum of the inputs
 mk_next_module_helper(_Name-Inputs-Outputs,Res) :-
-        maplist(mk_tagvar_name,Inputs,InputVars),
+        maplist(mk_var_name([tag]),Inputs,InputVars),
         (   foreach(O, Outputs),
             foreach(R, Rs),
             param(InputVars)
         do  mk_sum(InputVars, Rhs),
-            mk_tagvarprimed_name(O, Lhs),
+            mk_var_name([tag, prime], O, Lhs),
             format_atom('~p = ~p', [Lhs, Rhs], _R),
             mk_next_sep(_R,R)
         ),
@@ -172,18 +172,16 @@ mk_next_assign_op(L,R,Res) :-
             ir:link(R,Atoms),
             (   Atoms = [] ->
                 missing_atom(R, Res)
-            ;   maplist(mk_tagvar_name, Atoms, TagVars),
-                mk_tagvarprimed_name(L, LTagVar1),
+            ;   maplist(mk_var_name([tag]), Atoms, TagVars),
+                mk_var_name([tag,prime], L, LTagVar1),
                 mk_sum(TagVars, TagSum),
                 format_atom('~p = ~p', [LTagVar1, TagSum], Res)
             )
-        ;   R = const_expr ->
-            missing_atom(R, Res)
         ;   atom(R) ->
-            mk_var_name(L,LV), mk_primed(LV,LV1),
+            mk_var_name([prime],L,LV1),
             mk_var_name(R,RV),
-            mk_tagvar_name(L,LT), mk_primed(LT,LT1),
-            mk_tagvar_name(R,RT),
+            mk_var_name([tag,prime], L,LT1),
+            mk_var_name([tag], R,RT),
             format_atom('assign_op(~p, ~p, ~p, ~p)', [LT1, RT, LV1, RV], Res)
         ;   number(R) ->
             missing_atom(R,Res)

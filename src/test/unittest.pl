@@ -69,6 +69,17 @@ runner(F, In, Out, Exp, Res) :-
 %% BEGINNING OF UNIT TESTS
 %% %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+test(vc_vars, true(Res = Exp)) :-
+        In   = [ register(x)
+               , register(y)
+               , link(l, [])
+               ],
+        Exp = ['VL_x','VL_y','VLT_x','VLT_y','VL_done','VL_l',
+               'VR_x','VR_y','VRT_x','VRT_y','VR_done','VR_l'],
+        consult_list(In),
+        run_initial_pass,
+        mk_vcs_vars(Res).
+
 test(tr_body, true(Res = Exp)) :-
         F    = mk_next_body,
         In   = [ register(x)
@@ -81,29 +92,10 @@ test(tr_body, true(Res = Exp)) :-
         Out = " \
         ( \
           true, \
-          assign_op(V_y_t1, V_x_t, V_y1, V_x), \
+          assign_op(VT1_y, VT_x, V1_y, V_x), \
           true, \
-          ite(V_y_t1>=1, Done1=1, Done1 = Done), \
-          Done = 0 \
-        )",
-        runner(F, In, Out, Exp, Res).
-
-test(tr_body, true(Res = Exp)) :-
-        F    = mk_next_body,
-        In   = [ register(a)
-               , register(b)
-               , taint_sink(b)
-               , always( event1(star)
-                       , b_asn(b, a)
-                       )
-               ],
-        Out = " \
-        ( \
-          true, \
-          assign_op(V_b_t1, V_a_t, V_b1, V_a), \
-          true, \
-          ite(V_b_t1>=1, Done1=1, Done1 = Done), \
-          Done = 0 \
+          ite(VT1_y>=1, V1_done=1, V1_done = V_done), \
+          V_done = 0 \
         )",
         runner(F, In, Out, Exp, Res).
 
