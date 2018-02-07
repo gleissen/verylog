@@ -1,38 +1,56 @@
 /* This module contains various utility predicates */
 
 :- module(misc, [
+		 copy_instantiate/4,
+		 format_atom/3,
 		 fresh_pred_sym/1,
+		 get_fresh_num/1,
+		 get_ord_pairs/2,
+		 get_pairs/2,
 		 mk_and/2,
 		 mk_and/3,
-		 get_fresh_num/1,
+		 negate/2, bb_inc/1,
 		 reset_fresh_num/0,
-		 get_pairs/2,
-		 get_ord_pairs/2,
+		 reset_pred_sym/0,
 		 substitute_term/4,
 		 substitute_term_avl/4,
-		 format_atom/3,
-		 copy_instantiate/4,
-		 negate/2, bb_inc/1,
-		 reset_pred_sym/0
+                 add_prefix/3,
+                 add_suffix/3,
+                 contains/2,
+                 dot/3,
+                 droplist/3,
+                 flatten/2,
+                 flip/3,
+                 fold/4,
+                 inline_comment/2,
+                 missing_atom/2,
+                 mk_ite/4,
+                 mk_nl/2,
+                 mk_sum/2,
+                 print_file/1,
+                 throwerr/2,
+                 warn/2
 		], [hidden(true)]).
 :- use_module(library(codesio)).
 :- use_module(library(ordsets)).
 :- use_module(library(terms)).
 :- use_module(library(avl)).
+:- use_module(library(lists)).
 
+mk_and(L,R) :- rev(L, L1), mk_and_(L1, R).
 
-mk_and(true, R, R) :- !.
-mk_and(false, _, false) :- !.
-mk_and(R, true, R) :- !.
-mk_and(_, false, false) :- !.
-mk_and(A, B, (A, B)).
+mk_and_([], true).
+mk_and_([H|T], R) :-
+        foreach(X, T),
+        fromto(H, In, Out, R)
+        do
+        mk_and(X, In, Out).
 
-mk_and([A1|As], R) :-
-	foreach(A, As),
-	fromto(A1, In, Out, R)
-	do
-	mk_and(A, In, Out).
-mk_and([], true).
+mk_and(true,  R,     R)     :- !.
+mk_and(false, _,     false) :- !.
+mk_and(R,     true,  R)     :- !.
+mk_and(_,     false, false) :- !.
+mk_and(A,     B,     (A, B)).
 
 bb_inc(Key) :-
 	bb_get(user:Key, I),
@@ -123,3 +141,80 @@ negate(A=B, A\==B).
 negate(A==B, A\==B).
 negate(A\==B, A==B).
 negate(A=\=B, A==B).
+
+mk_sum([],_) :-
+        format('empty list is given to mk_sum', []),
+        halt(1).
+
+mk_sum([H|T],Res) :-
+        % rev(L, [H|T]),
+        (   foreach(X, T),
+            fromto(H, In, Out, Res)
+        do  Out = In + X
+        ).
+
+flatten([], []).
+flatten([H|T], L) :-
+        is_list(H),
+        flatten(T, L2),
+        append(H, L2, L).
+
+contains(List, Elem) :- memberchk(Elem, List).
+
+warn(Format,Args) :-
+        format(user_error, Format, Args),
+        format(user_error, '~n', []).
+
+print_file(File) :-
+        open(File, read, Stream),
+        print_file_helper(Stream),
+        close(Stream) .
+
+print_file_helper(Stream) :-
+        read(Stream, X),
+        ( \+ at_end_of_stream(Stream) ->
+            (format('~p~n', [X]), print_file_helper(Stream))
+        ; true
+        ).
+
+add_suffix(S,X,X1) :-
+        format_atom('~p~p', [X,S], X1).
+
+add_prefix(P,X,X1) :-
+        format_atom('~p~p', [P,X], X1).
+
+mk_nl(X,X1) :-
+        format_atom('~p~n', [X], X1).
+
+mk_ite(Cond,Then,Else,Res) :-
+        format_atom('ite(~p, ~p, ~p)', [Cond, Then, Else], Res).
+
+missing_atom(P, Res) :-
+        inline_comment(P, Comment),
+        format_atom('~p true', [Comment], Res).
+
+inline_comment(P, Comment) :-
+        atom_codes(CB, "/*"),
+        atom_codes(CE, "*/"),
+        format_atom('~p ~p ~p', [CB, P, CE], Comment).
+
+dot([],In,In).
+dot([H|T],In,Out) :-
+        dot(T, In, _Out),
+        call(H, _Out, Out).
+
+fold(_,A,[],A) :- !.
+fold(P,A,[H|T],R) :-
+        !,
+        call(P,A,H,A2),
+        fold(P,A2,T,R).
+
+fold(_,_,T,_) :-
+        throwerr('~n!!! fold for ~p is not yet implemented !!!~n', [T]).
+
+flip(A,F,R) :- call(F,A,R).
+
+throwerr(Format,Args) :-
+        warn(Format,Args),
+        false.
+        % halt(1).

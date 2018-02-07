@@ -2,12 +2,12 @@
 
 module stalling_cpu(clk);
    input clk;
-  
+   
    //=============  
    // Definitions
    //=============
 
-   reg [1:0] Stall;
+   reg [1:0]  Stall;
    reg [31:0] IF_instr;
    reg [31:0] ID_instr;
    reg [1:0]  EX_ALUOp;
@@ -18,7 +18,8 @@ module stalling_cpu(clk);
    // IF stage
    //=============
 
-   // @annot{taint_source(IF_instr)}
+   // -- Annotation: taint source
+   // @annot{taint_source(v_IF_instr)}
    
    always @(posedge clk) 
      if (Stall)
@@ -34,14 +35,14 @@ module stalling_cpu(clk);
    //=============
    
    // no definition for this; treat as wire.
-   alu EX_ALU(ID_instr, EX_ALUOut);
+   alu EX_ALU(ID_instr, EX_ALUOp);
 
    //=============
    // EXEC stage
    //=============
 
    always @(posedge clk)	
-     MEM_ALUOut <= EX_ALUOut;
+     MEM_ALUOut <= EX_ALUOp;
 
    //=============
    // MEM stage
@@ -55,6 +56,24 @@ module stalling_cpu(clk);
    //=============
 
    // -- Annotation: taint sink.   
-   // @annot{taint_sink(WB_ALUOut)}.
+   // @annot{taint_sink(v_WB_ALUOut)}.
 
+endmodule
+
+module decide_stall(i, o);
+   input i;
+   output o;
+   reg    i;
+   reg    o;
+   
+   assign o = i;
+endmodule
+
+module alu(i, o);
+   input i;
+   output o;
+   reg    i;
+   reg    o;
+
+   assign o = i;
 endmodule
