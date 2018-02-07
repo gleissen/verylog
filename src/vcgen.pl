@@ -18,6 +18,7 @@ mk_vcs_init(Res) :-
 	mk_vcs_vars(VcsVars),
 	mk_and(VcsVars,VsArgs),
 
+        %% set taint bits of source registers to 1
         query_ir(taint_source, Sources),
         (   foreach(S, Sources),
             foreach(R1, TVRes1),
@@ -28,6 +29,7 @@ mk_vcs_init(Res) :-
             mk_vc_sep(_R1,R1)
         ),
 
+        %% set taint bits of other registers to 0
         findall(R, ir:register(R), Regs),
         exclude(contains(Sources), Regs, RestRegs),
         (   foreach(Reg, RestRegs),
@@ -39,17 +41,12 @@ mk_vcs_init(Res) :-
             mk_vc_sep(_R2,R2)
         ),
 
-        done_atom(DoneAtom),
-        findall(X, ir:link(X,_), UFAtoms),
-        (   foreach(A, [DoneAtom|UFAtoms]),
-            foreach(R3,  TVRes3),
-            param(TVRes3)
-        do  mk_var_name([tag, left],  A, TVL3),
-            mk_var_name([tag, right], A, TVR3),
-            format_atom('~p = 0, ~p = 0', [TVL3, TVR3], _R3),
-            mk_vc_sep(_R3,R3)
-        ),
+        %% both runs are not done yet
+        mk_done_var([left],  DoneL),
+        mk_done_var([right], DoneR),
+        format_atom('~p=0,~p=0', [DoneL, DoneR], TVRes3),
 
+        %% initial values of the source registers are the same for both runs
         (   foreach(S2, Sources),
             foreach(R4,  TVRes4),
             param(TVRes4)
@@ -59,7 +56,7 @@ mk_vcs_init(Res) :-
             mk_vc_sep(_R4, R4)
         ),
 
-        flatten([TVRes1, TVRes2, TVRes3, TVRes4], _VsBody),
+        flatten([TVRes1, TVRes2, [TVRes3], TVRes4], _VsBody),
         mk_and(_VsBody, VsBody),
 
 	format_atom('inv(~p) :- ~p.', [VsArgs, VsBody], Res).
