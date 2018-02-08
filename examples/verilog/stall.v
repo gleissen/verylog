@@ -66,7 +66,9 @@ module decide_stall(i, o);
    reg    i;
    reg    o;
    
-   assign o = i;
+   always @ (*)
+     o = i;
+
 endmodule
 
 module alu(i, o);
@@ -75,5 +77,6 @@ module alu(i, o);
    reg    i;
    reg    o;
 
-   assign o = i;
+   always @ (*)
+     o = i;
 endmodule

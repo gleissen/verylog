@@ -32,6 +32,7 @@ plot_assignments :-
             )
         ),
 
+        format('subgraph {~n', []),
         format('register [shape=ellipse];~n', []),
         format('wire     [shape=box];~n', []),
         format('register -> wire [color=orange, label="module", fontcolor=orange];~n', []),
@@ -39,6 +40,7 @@ plot_assignments :-
         format('register -> wire [color=green, label="cont", fontcolor=green];~n', []),
         format('register -> wire [label="blocking", color=red, fontcolor=red];~n', []),
         format('register -> wire [color=black, label="non-blocking"];~n', []),
+        format('}~n', []),
 
         format('}~n', []),
 
@@ -56,7 +58,7 @@ plot_assign(Options, L, R) :-
             ir:link(R, Args),
             (   foreach(A, Args),
                 param(L), param(Options)
-            do  plot_assign([label(uf),fontcolor(blue)|Options], L, A)
+            do  plot_assign([color(blue)], L, A)
             )
         ;   atom(R)    ->
             plot_node(L),
@@ -108,7 +110,10 @@ plot_node(N) :-
         (   ir:wire(N) ->
             format('~p [shape=box];~n', [N])
         ;   ir:register(N) ->
-            format('~p [shape=ellipse];~n', [N])
+            (   (ir:taint_source(N) ; ir:taint_sink(N)) ->
+                format('~p [shape=doubleoctagon];~n', [N])
+            ;   format('~p [shape=ellipse];~n', [N])
+            )
         ;   is_uf(N) ->
             throwerr('node cannot be a UF!', [])
         ).

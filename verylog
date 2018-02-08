@@ -94,9 +94,9 @@ print_IR() {
     predicates='register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1'
     cat <<EOF
 % vim: set ft=prolog
-:- multifile $predicates.
-:- dynamic $predicates.
-:- discontiguous register/1, wire/1, asn/2, module_inst/3.
+:- multifile     $predicates.
+:- dynamic       $predicates.
+:- discontiguous $predicates.
 
 EOF
     
