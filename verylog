@@ -15,6 +15,7 @@ zparseopts -D -E -- \
            M:=TOPLEVEL_MODULE \
            -plot=PLOT \
            -race=RACE \
+           -emacs=EMACS \
            h=HELP -help=HELP
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
@@ -31,6 +32,8 @@ verylog options:
       Plots the assignment graph (doesn't make sense atm)
   --race
       Checks race conditions
+  --emacs
+      Opens the output (IR or VC) in emacs
   -h, --help
       Prints this help
 
@@ -98,7 +101,8 @@ fi
 print_IR() {
     predicates='register/1, wire/1, module_inst/3, always/2, link/2, asn/2, taint_source/1, taint_sink/1'
     cat <<EOF
-% vim: set ft=prolog
+% -*- mode: prolog -*-
+% vim: set ft=prolog:
 :- multifile     $predicates.
 :- dynamic       $predicates.
 :- discontiguous $predicates.
@@ -134,7 +138,7 @@ EOF
 print_IR $TOPLEVEL_MODULE > $IR_FILE
 
 if [[ -n "$JUST_IR" ]]; then
-    cat $IR_FILE
+    [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $IR_FILE || cat $IR_FILE
     exit 0
 fi
 
@@ -200,8 +204,7 @@ else
 fi
 
 if [[ -n "$JUST_VCGEN" ]]; then
-    cat $HSF_FILE
-    echo
+    [[ -n "$EMACS" ]] && emacsclient -c -a emacs --no-wait $HSF_FILE || cat $HSF_FILE
     exit 0
 fi
 
