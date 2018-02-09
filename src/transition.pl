@@ -55,6 +55,7 @@ mk_next_toplevel(always, Res)        :- !, mk_next_always(Res).
 mk_next_toplevel(module_inst, Res)   :- !, mk_next_module_inst(Res).
 mk_next_toplevel(taint_sink, Res)    :- !, mk_next_sink_cond(Res).
 mk_next_toplevel(asn, Res)           :- !, mk_next_asn(Res).
+mk_next_toplevel(initial, Res)       :- !, warn('skipping initial tr',[]), missing_atom('initial', Res).
 mk_next_toplevel(TLP, _) :-
         throwerr('mk_next_toplevel for ~p is not yet implemented !', [TLP]).
 

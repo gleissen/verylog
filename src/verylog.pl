@@ -35,7 +35,9 @@ mk_output_file(Res) :-
         ;   Vcs = ''
         ),
 
-        format_atom('~n~n~p~n~n~p~n~n~p', [QNaming, Next, Vcs], Res),
+        mk_header(Header),
+
+        format_atom('~p~n~n~p~n~n~p~n~n~p', [Header, QNaming, Next, Vcs], Res),
         true.
 	
 main :-
@@ -46,3 +48,8 @@ main :-
 	format('~p',[Res]),
         true.
         
+
+mk_header(Header) :-
+        inline_comment('-*- mode: prolog -*-', Line1),
+        inline_comment('vim: set ft=prolog:', Line2),
+        format_atom('~p~n~p~n', [Line1, Line2], Header).
