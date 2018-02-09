@@ -66,14 +66,17 @@ ir_stmt([
          block,
          b_asn,
          nb_asn,
-         ite
+         ite,
+         skip,
+         for
         ]).
 
 ir_toplevel_list([
                   register, wire,
                   module_inst, always,
                   link, asn,
-                  taint_source, taint_sink
+                  taint_source, taint_sink,
+                  initial
                  ]).
         
 query_ir(P, Ls) :-

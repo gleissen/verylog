@@ -14,6 +14,7 @@ zparseopts -D -E -- \
            -no-interpreter=NO_INTERPRETER -just-ir=JUST_IR -just-vcgen=JUST_VCGEN \
            M:=TOPLEVEL_MODULE \
            -plot=PLOT \
+           -race=RACE \
            h=HELP -help=HELP
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
@@ -26,6 +27,10 @@ verylog options:
       Just generate the file that will be fed to qarmc and print it
   --no-interpreter
       Build the sicstus program rather than interpreting it
+  --plot
+      Plots the assignment graph (doesn't make sense atm)
+  --race
+      Checks race conditions
   -h, --help
       Prints this help
 
@@ -154,6 +159,16 @@ if [[ -n "$PLOT" ]]; then
     [[ -f $png_file ]] && xdg-open $png_file &>/dev/null || exit 1
 
     exit 0
+fi
+
+if [[ -n "$RACE" ]]; then
+    sicstus \
+        -f --noinfo --nologo \
+        -l "${THIS_DIR}/src/race_check.pl" \
+        --goal "(main -> halt; halt(1))." \
+        -- $IR_FILE
+
+    exit $?
 fi
 
 if [[ -z "${NO_INTERPRETER}" ]]; then

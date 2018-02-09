@@ -9,10 +9,9 @@
 %% ### INITIAL PASS OVER THE PROGRAM ###########################################
 %% #############################################################################
 
-:- dynamic b_asn_count/1, b_written_to/1.
+:- dynamic b_written_to/1.
 
 run_initial_pass :-
-        retractall(b_asn_count(_)),
         retractall(b_written_to(_)),
         
         ir_toplevel_list(TopLevelPredicates),
@@ -23,7 +22,6 @@ run_initial_pass :-
 
 run_initial_toplevels(always, _Event-Stmt, _) :-
         !, Stmt =.. [Type|Args],
-        set_b_asn_count(0),
         run_initial_stmt(Type, Args, _).
 
 run_initial_toplevels(module_inst, _Name-_Inputs-_Outputs, _) :- !.
@@ -68,9 +66,7 @@ run_initial_stmt(ite,[Cond,Then,Else], _) :-
         ),
         (   compound(Then) ->
             Then =.. [TypeThen|ArgThen],
-            b_asn_count(N),
-            run_initial_stmt(TypeThen, ArgThen,_),
-            set_b_asn_count(N)
+            run_initial_stmt(TypeThen, ArgThen,_)
         ;   true
         ),
         (   compound(Else) ->
@@ -81,19 +77,12 @@ run_initial_stmt(ite,[Cond,Then,Else], _) :-
 
 run_initial_stmt(nb_asn,[_Lhs,_Rhs], _) :- !.
 
-run_initial_stmt(b_asn,[Lhs,Rhs], _) :- !,
-        b_asn_count(N),
-        N1 is N + 1,
-        (   N1 > 1 ->
-            throwerr('Mulitple blocking assignments in a single always block !', [])
+run_initial_stmt(b_asn,[L,R], _) :- !,
+        (   b_written_to(R) ->
+            throwerr('~p is read & written by blocking assignments !', [R])
         ;   true
         ),
-        set_b_asn_count(N1),
-        (   b_written_to(Rhs) ->
-            throwerr('~p is read & written by blocking assignments !', [Rhs])
-        ;   true
-        ),
-        assert(b_written_to(Lhs)).
+        assert(b_written_to(L)).
         
 
 run_initial_stmt(block,[Stmts], _) :- !,
@@ -102,6 +91,8 @@ run_initial_stmt(block,[Stmts], _) :- !,
             run_initial_stmt(Type,Args,_)
         ).
 
+run_initial_stmt(skip,_,_) :- !.
+
 run_initial_stmt(Type,Args,_) :-
         ir_stmt(Stmts),
         (   memberchk(Type, Stmts), 
@@ -109,10 +100,6 @@ run_initial_stmt(Type,Args,_) :-
         ;   throwerr('invalid: run_initial_stmt for ~p(~p)~n', [Type,Args])
         ).
         
-set_b_asn_count(N) :-
-        retractall(b_asn_count(_)),
-        assert(b_asn_count(N)).
-
 set_b_written_to(R) :-
         assert(b_written_to(R)).
 
