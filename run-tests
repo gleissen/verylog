@@ -18,7 +18,7 @@ TESTS=( "01. stall hand"    "-M stalling_cpu  $THIS_DIR/examples/verilog/stall.v
 
 echo
 
-TEST_PL="$THIS_DIR/src/test/unittest.pl"
+TEST_PL="$THIS_DIR/test/unittest.pl"
 
 blue "================================================================================"
 blue "   RUNNING UNIT TESTS"

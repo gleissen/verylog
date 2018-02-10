@@ -1,13 +1,13 @@
 :- use_module(library(lists)).
 :- use_module(library(file_systems)).
 
-:- use_module('../lib/misc.pl').
-:- use_module('../lib/ir.pl').
+:- use_module('../src/lib/misc.pl').
+:- use_module('../src/lib/ir.pl').
 
-:- use_module('../initial_pass.pl').
-:- use_module('../query_naming.pl').
-:- use_module('../transition.pl').
-:- use_module('../vcgen.pl').
+:- use_module('../src/initial_pass.pl').
+:- use_module('../src/query_naming.pl').
+:- use_module('../src/transition.pl').
+:- use_module('../src/vcgen.pl').
 
 :- use_module(library(plunit)).
 
@@ -91,7 +91,6 @@ test(tr_body, true(Res = Exp)) :-
                ],
         Out = " \
         ( \
-          true, \
           assign_op(VT1_y, VT_x, V1_y, V_x), \
           true, \
           ite(VT1_y>=1, V1_done=1, V1_done = V_done), \

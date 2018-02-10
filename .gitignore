@@ -2,6 +2,7 @@ vcgen
 *.sav
 .log.*
 .*.pl
+.*.v
 configuration.sh
 TAGS
 

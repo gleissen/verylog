@@ -62,21 +62,20 @@ wipe_db :-
 save(X) :-
         assert(X).
 
-ir_stmt([
-         block,
-         b_asn,
-         nb_asn,
-         ite,
-         skip,
-         for
+ir_stmt([ block
+        , b_asn
+        , nb_asn
+        , ite
+        , skip
         ]).
 
-ir_toplevel_list([
-                  register, wire,
-                  module_inst, always,
-                  link, asn,
-                  taint_source, taint_sink,
-                  initial
+ir_toplevel_list([ register
+                 , wire
+                 , always
+                 , link
+                 , asn
+                 , taint_source
+                 , taint_sink
                  ]).
         
 query_ir(P, Ls) :-

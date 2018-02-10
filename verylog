@@ -16,6 +16,7 @@ zparseopts -D -E -- \
            -plot=PLOT \
            -race=RACE \
            -emacs=EMACS \
+           i=INTERACTIVE \
            h=HELP -help=HELP
 
 if [[ $# -eq 0 || -n "$HELP" ]]; then
@@ -34,6 +35,8 @@ verylog options:
       Checks race conditions
   --emacs
       Opens the output (IR or VC) in emacs
+  -i
+      Forces the interactive mode in sicstus
   -h, --help
       Prints this help
 
@@ -135,6 +138,15 @@ EOF
     rm -f "$LOGFILE" "$PREPROCESSED_FILE"
 }
 
+function check_race() {
+    sicstus \
+        $INTERACTIVE \
+        -f --noinfo --nologo \
+        -l "${THIS_DIR}/src/race_check.pl" \
+        --goal "main." \
+        -- $IR_FILE
+}
+
 print_IR $TOPLEVEL_MODULE > $IR_FILE
 
 if [[ -n "$JUST_IR" ]]; then
@@ -166,12 +178,7 @@ if [[ -n "$PLOT" ]]; then
 fi
 
 if [[ -n "$RACE" ]]; then
-    sicstus \
-        -f --noinfo --nologo \
-        -l "${THIS_DIR}/src/race_check.pl" \
-        --goal "(main -> halt; halt(1))." \
-        -- $IR_FILE
-
+    check_race
     exit $?
 fi
 
